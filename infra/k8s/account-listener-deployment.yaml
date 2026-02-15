@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rawl-account-listener
+  labels:
+    app: rawl-account-listener
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rawl-account-listener
+  template:
+    metadata:
+      labels:
+        app: rawl-account-listener
+    spec:
+      containers:
+        - name: listener
+          image: rawl-backend:latest
+          command: ["python", "-m", "rawl.solana.account_listener"]
+          envFrom:
+            - secretRef:
+                name: rawl-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

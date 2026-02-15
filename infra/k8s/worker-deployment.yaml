@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rawl-worker
+  labels:
+    app: rawl-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rawl-worker
+  template:
+    metadata:
+      labels:
+        app: rawl-worker
+    spec:
+      containers:
+        - name: worker
+          image: rawl-worker:latest
+          envFrom:
+            - secretRef:
+                name: rawl-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+              nvidia.com/gpu: "1"
