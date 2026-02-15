@@ -41,6 +41,9 @@ Thumbs.db
 # Claude Code local settings
 .claude/
 
+# Markdown docs
+*.md
+
 # Testing
 .coverage
 htmlcov/
