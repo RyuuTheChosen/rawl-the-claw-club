@@ -1,79 +1,104 @@
 # Rawl `[Alpha]`
 
-**AI fighting game arena with on-chain betting.**
+**Autonomous AI agent vs AI agent wagering infrastructure on Solana.**
 
-Train AI agents on your own hardware. Upload them to fight in ranked matches on classic arcade titles. Bet SOL on the outcome.
+Rawl is an open protocol for deploying autonomous AI agents into competitive environments, matching them by skill, running deterministic outcomes, and settling wagers on-chain. No human in the loop. Agents fight. Solana settles.
 
-> Most AI competition platforms own the training loop. Rawl doesn't — you train on your GPUs, we run the fights. Every match is emulated server-side, streamed live, hashed for integrity, and settled on Solana.
+> The first vertical is classic fighting games — but the infrastructure is game-agnostic. Any environment where two AI agents can produce a deterministic outcome can plug into Rawl's matchmaking, streaming, and on-chain settlement layer.
 
 ---
+
+## The Idea
+
+Autonomous AI agents are everywhere — trading, browsing, coding. But there's no neutral infrastructure for agents to **compete against each other with real stakes**.
+
+Rawl is that infrastructure:
+
+- **Agents compete autonomously** — no human input during matches
+- **Outcomes are deterministic** — server-side execution, hashed and verifiable
+- **Settlement is on-chain** — Solana smart contracts escrow SOL, pay winners, refund cancellations
+- **Training is decentralized** — users train on their own hardware, upload checkpoints
+
+The platform doesn't train your agent. It doesn't own your model. It runs the fight, proves the result, and moves the money.
 
 ## How It Works
 
 ```
- Train                    Fight                     Bet
- ─────                    ─────                     ───
- Users train agents       Platform runs matches     Spectators wager SOL
- on their own GPUs        via stable-retro          through on-chain pools
+ Deploy                   Compete                   Settle
+ ──────                   ───────                   ──────
+ Users train agents       Platform executes          Solana program
+ on their own GPUs        matches server-side        escrows & resolves
+
        │                        │                         │
        ▼                        ▼                         ▼
- Upload checkpoint ──► Matchmaker pairs by Elo ──► Solana smart contract
-                              │                     escrows & pays out
+ Upload checkpoint ──► Matchmaker pairs by Elo ──► Smart contract
+                              │                     manages wagering
                               ▼
-                     Live stream via WebSocket
+                     Deterministic execution
+                     streamed live via WebSocket
                      (video @ 30fps + data @ 10Hz)
 ```
 
-### Training Your Agent
+### Agent Lifecycle
 
-Training happens off-platform. You bring your own GPUs and training setup.
+1. **Train** — Bring your own GPUs. Use stable-retro + SB3 (PPO) or any RL framework
+2. **Upload** — Submit model checkpoint via the agent gateway API
+3. **Calibrate** — Platform runs matches against reference bots to seed Elo rating
+4. **Compete** — Agent enters ranked matchmaking queue, fights autonomously at its skill level
+5. **Earn** — Agent owners and spectators wager SOL on outcomes
 
-1. **Pick a game** — SF2 Champion Edition (Genesis) is the launch title
-2. **Train locally** — Use stable-retro + Stable-Baselines3 (PPO) against built-in AI or self-play
-3. **Upload checkpoint** — Submit your `.zip` model via the agent gateway API
-4. **Calibration** — The platform runs 5 matches against reference bots to seed your Elo
-5. **Ranked play** — Your agent enters the matchmaking queue and fights at its skill level
-
-### Betting Flow
+### On-Chain Settlement
 
 ```
- Place Bet ──► Match Runs ──► Result Hashed ──► On-Chain Resolve ──► Auto-Payout
-    │                                                                     │
-    ▼                                                                     ▼
- SOL goes to          Oracle submits winner                    Winners withdraw
- escrow vault         to smart contract                        from vault PDA
+ Place Wager ──► Match Executes ──► Result Hashed ──► Oracle Resolves ──► Auto-Payout
+     │                                                                        │
+     ▼                                                                        ▼
+  SOL escrowed            Oracle signs winner                      Winners claim
+  in vault PDA            to smart contract                        from vault
 ```
 
-Betting pools are Solana PDAs managed by the Rawl program. SOL is escrowed in a program-owned vault on bet placement. When the match resolves, the oracle signs the result on-chain and winners can claim proportional payouts. If a match is cancelled, all bets are refunded.
+Every match produces a cryptographic hash of the full game state before settlement. Wagering pools are Solana PDAs — SOL is escrowed in a program-owned vault at bet time. The oracle submits the verified result on-chain. Winners withdraw proportional payouts. Cancelled matches refund automatically.
+
+No custody. No middleman. Code settles.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  Frontend (Next.js 14)                                           │
-│  App Router + Zustand + Tailwind + Solana Wallet Adapter         │
+│  Arena Viewer + Wagering UI + Solana Wallet Adapter              │
 ├──────────────────────────────────────────────────────────────────┤
 │  Backend (FastAPI)              │  Workers (Celery)               │
 │  REST API + Agent Gateway       │  Match Engine + Scheduler       │
 │  WebSocket Streaming            │  Elo Calibration + Seasonal     │
 ├─────────────────────────────────┼────────────────────────────────┤
-│  Emulation (stable-retro)       │  Solana Program (Anchor)        │
-│  In-process RetroEngine         │  MatchPool, Bet, PlatformConfig │
-│  Genesis / SF2 Champion Ed.     │  Escrow, Payout, Refund         │
+│  Execution Layer                │  Settlement Layer (Anchor)      │
+│  Deterministic game engine      │  MatchPool, Bet, PlatformConfig │
+│  Pluggable environment adapters │  Escrow, Payout, Refund         │
 ├──────────────────────────────────────────────────────────────────┤
-│  PostgreSQL    Redis    MinIO (S3)    Solana Validator            │
+│  PostgreSQL    Redis    MinIO (S3)    Solana                     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+## Core Infrastructure
 
-- **Own-GPU Training** — No vendor lock-in on compute. Train anywhere, fight here.
-- **Elo Ranking** — Calibration pipeline, configurable K-factors, quarterly seasonal resets
-- **Live Streaming** — Binary JPEG video and structured JSON data over WebSocket
-- **On-Chain Betting** — Solana escrow pools with automated payout on match resolution
-- **Matchmaking** — Elo-based queue with sliding windows and priority scheduling
-- **Replay Integrity** — Every match hashed, recorded, and archived to S3
-- **Multi-Game** — Pluggable adapter system for different fighting games
+- **Deterministic Execution** — Server-side match engine with hashed, reproducible outcomes
+- **On-Chain Settlement** — Solana program handles escrow, payout, and refunds with no custody
+- **Skill-Based Matchmaking** — Elo rating system with calibration, K-factor tiers, and seasonal resets
+- **Live Streaming** — Binary JPEG video + structured JSON data channels over WebSocket
+- **Pluggable Environments** — Game adapter interface for any competitive AI environment
+- **Replay Integrity** — Every match hashed, recorded, and archived to S3 before on-chain resolution
+- **Decentralized Training** — No vendor lock-in. Users train on their own compute, platform only executes
+
+## First Vertical: Fighting Games
+
+The launch environment is classic fighting games via stable-retro emulation:
+
+- **SF2 Champion Edition** (Genesis) — primary launch title
+- **SF3 3rd Strike**, **KOF 98**, **Tekken Tag** — additional adapters
+- Pluggable adapter system: implement `extract_state()`, `is_round_over()`, `is_match_over()` for any new game
+
+The adapter interface is intentionally simple — the same infrastructure can host chess engines, card game AI, strategy bots, or any environment that produces a deterministic winner.
 
 ## Tech Stack
 
@@ -81,17 +106,17 @@ Betting pools are Solana PDAs managed by the Rawl program. SOL is escrowed in a 
 |-------|-----------|
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, Zustand, Solana wallet-adapter |
 | Backend | Python 3.11+, FastAPI, SQLAlchemy (async), Celery, Redis |
-| Emulation | stable-retro (Genesis core), OpenCV for frame processing |
-| Blockchain | Solana, Anchor 0.30, solana-py, solders |
+| Execution | stable-retro, OpenCV, pluggable game adapters |
+| Settlement | Solana, Anchor 0.30, solana-py, solders |
 | Infrastructure | PostgreSQL, Redis, MinIO (S3-compatible), Docker Compose |
 
 ## Project Structure
 
 ```
 packages/
-  backend/        Python backend — API, match engine, services, Solana integration
-  frontend/       Next.js 14 — arena viewer, betting UI, wallet connection
-  contracts/      Solana Anchor program — betting pools, payouts, platform config
+  backend/        Execution engine, API, matchmaking, Solana integration
+  frontend/       Arena viewer, wagering UI, wallet connection
+  contracts/      Solana Anchor program — wagering pools, settlement, platform config
   shared/         Shared TypeScript types and constants
 scripts/          Dev utilities and testing scripts
 infra/            Docker and Kubernetes configs
@@ -131,7 +156,7 @@ make dev-frontend
 # In WSL2:
 solana-test-validator
 
-# Initialize platform config (needs funded oracle wallet)
+# Initialize platform config
 python scripts/init-platform.py
 ```
 
