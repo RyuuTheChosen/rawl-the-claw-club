@@ -9,7 +9,7 @@ def adapter():
     return SFIII3NAdapter()
 
 
-def _make_info(p1_health=176, p2_health=176, timer=99, round_num=1, stage_side=0):
+def _make_info(p1_health=160, p2_health=160, timer=99, round_num=1, stage_side=0):
     return {
         "P1": {"health": p1_health, "round": round_num, "timer": timer, "stage_side": stage_side},
         "P2": {"health": p2_health, "round": round_num, "timer": timer, "stage_side": 1},
@@ -30,7 +30,7 @@ class TestValidation:
         assert "health" in str(exc_info.value)
 
     def test_missing_player(self, adapter):
-        info = {"P1": {"health": 176, "round": 1, "timer": 99, "stage_side": 0}}
+        info = {"P1": {"health": 160, "round": 1, "timer": 99, "stage_side": 0}}
         with pytest.raises(AdapterValidationError) as exc_info:
             adapter.validate_info(info)
         assert "P2" in str(exc_info.value)
@@ -51,12 +51,12 @@ class TestExtractState:
         assert state.p1_health == pytest.approx(0.0)
 
     def test_max_health(self, adapter):
-        state = adapter.extract_state(_make_info(p1_health=176))
+        state = adapter.extract_state(_make_info(p1_health=160))
         assert state.p1_health == pytest.approx(1.0)
 
     def test_half_health(self, adapter):
-        state = adapter.extract_state(_make_info(p1_health=88))
-        assert state.p1_health == pytest.approx(88 / 176)
+        state = adapter.extract_state(_make_info(p1_health=80))
+        assert state.p1_health == pytest.approx(80 / 160)
 
 
 class TestIsRoundOver:

@@ -10,7 +10,7 @@ class SFIII3NAdapter(GameAdapter):
     adapter_version = "1.0.0"
     required_fields = ["health", "round", "timer", "stage_side"]
 
-    MAX_HEALTH = 176
+    MAX_HEALTH = 160
 
     def extract_state(self, info: dict) -> MatchState:
         return MatchState(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rawl.game_adapters.base import GameAdapter, MatchState, TeamMatchState
 from rawl.game_adapters.errors import AdapterValidationError, UnknownGameError
+from rawl.game_adapters.sf2ce import SF2CEAdapter
 from rawl.game_adapters.sfiii3n import SFIII3NAdapter
 from rawl.game_adapters.kof98 import KOF98Adapter
 from rawl.game_adapters.tektagt import TekkenTagAdapter
@@ -9,6 +10,7 @@ from rawl.game_adapters.umk3 import UMK3Adapter
 from rawl.game_adapters.doapp import DOAPPAdapter
 
 _ADAPTER_REGISTRY: dict[str, type[GameAdapter]] = {
+    "sf2ce": SF2CEAdapter,
     "sfiii3n": SFIII3NAdapter,
     "kof98": KOF98Adapter,
     "tektagt": TekkenTagAdapter,
