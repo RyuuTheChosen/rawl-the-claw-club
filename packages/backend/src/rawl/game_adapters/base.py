@@ -33,7 +33,7 @@ class TeamMatchState(MatchState):
 class GameAdapter(ABC):
     """Abstract base class for per-game adapters.
 
-    Each adapter translates DIAMBRA env info dicts into normalized MatchState
+    Each adapter translates emulation engine info dicts into normalized MatchState
     and provides game-specific round/match completion logic.
     """
 
@@ -42,7 +42,7 @@ class GameAdapter(ABC):
     required_fields: list[str]
 
     def validate_info(self, info: dict) -> None:
-        """Validate that all required fields exist in the DIAMBRA info dict.
+        """Validate that all required fields exist in the info dict.
 
         Called on the first frame of each match BEFORE lock_match.
         Raises AdapterValidationError with a list of missing fields.
@@ -59,7 +59,7 @@ class GameAdapter(ABC):
 
     @abstractmethod
     def extract_state(self, info: dict) -> MatchState | TeamMatchState:
-        """Extract normalized game state from DIAMBRA info dict."""
+        """Extract normalized game state from emulation engine info dict."""
         ...
 
     @abstractmethod

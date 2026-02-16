@@ -19,11 +19,10 @@ class Settings(BaseSettings):
     s3_bucket: str = "rawl-replays"
     s3_region: str = "us-east-1"
 
-    # DIAMBRA
-    diambra_host: str = "localhost"
-    diambra_port: int = 50051
-    diambra_rom_path: str = "/roms"
-    diambra_image: str = "diambra/arena:latest"
+    # Emulation (stable-retro)
+    retro_game: str = "StreetFighterIISpecialChampionEdition-Genesis-v0"
+    retro_integration_path: str = ""
+    retro_obs_size: int = 256
 
     # CORS
     cors_origins: str = "http://localhost:3000"
@@ -57,6 +56,25 @@ class Settings(BaseSettings):
     training_max_concurrent_standard: int = 2
     training_max_concurrent_pro: int = 4
 
+    # Elo rating system
+    elo_rating_floor: float = 800.0
+    elo_k_calibration: int = 40
+    elo_k_established: int = 20
+    elo_k_elite: int = 16
+    elo_elite_threshold: float = 1800.0
+    elo_calibration_match_threshold: int = 10
+
+    # Calibration
+    calibration_reference_elos: str = "1000,1100,1200,1400,1600"
+    calibration_min_success: int = 3
+    calibration_max_retries: int = 2
+
+    # Seasonal reset (quarterly: Jan 1, Apr 1, Jul 1, Oct 1)
+    seasonal_reset_cron_month: str = "1,4,7,10"
+    seasonal_reset_cron_day: str = "1"
+    seasonal_reset_cron_hour: str = "0"
+    seasonal_reset_cron_minute: str = "0"
+
     # Rate limiting
     rate_limit_enabled: bool = True
 
@@ -67,6 +85,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",")]
+
+    @property
+    def calibration_reference_elo_list(self) -> list[int]:
+        return [int(e.strip()) for e in self.calibration_reference_elos.split(",")]
 
 
 settings = Settings()

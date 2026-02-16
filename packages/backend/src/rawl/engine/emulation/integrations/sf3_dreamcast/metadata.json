@@ -1,0 +1,7 @@
+{
+  "default_state": "AlexVsChunLi.Arcade",
+  "default_player_state": [
+    "AlexVsChunLi.Arcade",
+    "VsMode.2P"
+  ]
+}

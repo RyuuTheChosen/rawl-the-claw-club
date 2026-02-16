@@ -28,7 +28,7 @@ fmt: ## Format backend code
 	cd packages/backend && ruff format src/
 
 dev-backend: ## Start backend dev server
-	cd packages/backend && uvicorn rawl.main:create_app --factory --reload --host 0.0.0.0 --port 8000
+	cd packages/backend && uvicorn rawl.main:create_app --factory --reload --host 0.0.0.0 --port 8080
 
 dev-frontend: ## Start frontend dev server
 	cd packages/frontend && npm run dev

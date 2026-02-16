@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # Shutdown: close connections
-    account_listener.stop()
+    await account_listener.stop()
     listener_task.cancel()
     await solana_client.close()
     await redis_pool.close()

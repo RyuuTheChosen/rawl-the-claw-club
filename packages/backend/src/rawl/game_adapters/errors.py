@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 class AdapterValidationError(Exception):
-    """Raised when required DIAMBRA info fields are missing."""
+    """Raised when required info fields are missing."""
 
     def __init__(self, game_id: str, missing_fields: dict[str, list[str]]) -> None:
         self.game_id = game_id

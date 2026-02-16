@@ -58,3 +58,13 @@ minio_data/
 
 # Solana
 test-ledger/
+oracle-keypair.json
+
+# ROMs and emulation artifacts
+roms/
+*.chd
+sfiii3n.zip
+sf2_frame.png
+
+# Celery beat schedule files
+celerybeat-schedule*

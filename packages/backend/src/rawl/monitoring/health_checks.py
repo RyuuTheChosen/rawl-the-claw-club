@@ -77,36 +77,35 @@ async def check_solana_rpc() -> HealthStatus:
         from solana.rpc.async_api import AsyncClient
 
         async with AsyncClient(settings.solana_rpc_url) as client:
-            resp = await client.get_health()
-            ok = resp.value == "ok" if hasattr(resp, "value") else True
+            ok = await client.is_connected()
             if ok:
                 return HealthStatus(
                     "solana_rpc", True, latency_ms=(time.monotonic() - start) * 1000
                 )
-            return HealthStatus("solana_rpc", False, message=f"RPC unhealthy: {resp}")
+            return HealthStatus("solana_rpc", False, message="RPC unhealthy: is_connected returned False")
     except Exception as e:
         return HealthStatus("solana_rpc", False, message=str(e))
 
 
-async def check_diambra() -> HealthStatus:
-    """Check that the DIAMBRA Docker image is available."""
-    import asyncio
-
+async def check_retro() -> HealthStatus:
+    """Check that stable-retro is importable and the ROM is available."""
     from rawl.config import settings
 
     start = time.monotonic()
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "docker", "image", "inspect", settings.diambra_image,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+        import stable_retro
+
+        stable_retro.data.get_romfile_path(settings.retro_game)
+        return HealthStatus(
+            "retro",
+            True,
+            latency_ms=(time.monotonic() - start) * 1000,
+            message=f"ROM found: {settings.retro_game}",
         )
-        await asyncio.wait_for(proc.wait(), timeout=5.0)
-        if proc.returncode == 0:
-            return HealthStatus("diambra", True, latency_ms=(time.monotonic() - start) * 1000)
-        return HealthStatus("diambra", False, message=f"Image not found: {settings.diambra_image}")
+    except FileNotFoundError:
+        return HealthStatus("retro", False, message=f"ROM not found: {settings.retro_game}")
     except Exception as e:
-        return HealthStatus("diambra", False, message=str(e))
+        return HealthStatus("retro", False, message=str(e))
 
 
 async def check_match_queue() -> HealthStatus:
@@ -160,7 +159,7 @@ async def get_all_health() -> list[HealthStatus]:
         check_s3,
         check_celery,
         check_solana_rpc,
-        check_diambra,
+        check_retro,
         check_match_queue,
         check_active_matches,
     ]:

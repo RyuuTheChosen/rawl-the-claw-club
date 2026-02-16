@@ -6,7 +6,7 @@ import time
 from dataclasses import asdict
 
 from rawl.config import settings
-from rawl.engine.diambra_manager import DiambraManager
+from rawl.engine.emulation.retro_engine import RetroEngine
 from rawl.engine.field_validator import FieldValidator
 from rawl.engine.frame_processor import encode_mjpeg_frame, preprocess_for_inference
 from rawl.engine.match_result import MatchResult, compute_match_hash, resolve_tiebreaker
@@ -15,7 +15,7 @@ from rawl.engine.oracle_client import oracle_client
 from rawl.engine.replay_recorder import ReplayRecorder
 from rawl.game_adapters import get_adapter
 from rawl.game_adapters.errors import AdapterValidationError
-from rawl.monitoring.metrics import matches_active, matches_total, match_duration_seconds
+from rawl.monitoring.metrics import match_duration_seconds, matches_active, matches_total
 from rawl.redis_client import redis_pool
 from rawl.s3_client import upload_bytes
 
@@ -51,7 +51,7 @@ async def run_match(
         required_fields=adapter.required_fields,
     )
     recorder = ReplayRecorder(match_id)
-    diambra = DiambraManager(game_id, match_id)
+    engine = RetroEngine(game_id, match_id)
 
     action_log: list = []
     round_history: list[dict] = []
@@ -66,9 +66,9 @@ async def run_match(
         model_a = await load_fighter_model(fighter_a_model_path, game_id)
         model_b = await load_fighter_model(fighter_b_model_path, game_id)
 
-        # Step 2: Start DIAMBRA environment
-        logger.info("Starting DIAMBRA environment", extra={"match_id": match_id})
-        obs, info = diambra.start()
+        # Step 2: Start emulation engine
+        logger.info("Starting emulation engine", extra={"match_id": match_id})
+        obs, info = engine.start()
 
         # Step 3: Validate info on first frame BEFORE lock_match
         try:
@@ -99,7 +99,7 @@ async def run_match(
             combined_action = {"P1": action_a, "P2": action_b}
 
             # Step environment
-            obs, reward, terminated, truncated, info = diambra.step(combined_action)
+            obs, reward, terminated, truncated, info = engine.step(combined_action)
             action_log.append({"P1": action_a.tolist(), "P2": action_b.tolist()})
 
             # Extract state
@@ -243,7 +243,7 @@ async def run_match(
         match_duration_seconds.labels(game_id=game_id).observe(duration)
         recorder.close()
         recorder.cleanup()
-        diambra.stop()
+        engine.stop()
         logger.info(
             "Match finished",
             extra={
