@@ -119,6 +119,32 @@ async def create_custom_match(
     await db.commit()
     await db.refresh(match)
 
+    # Create on-chain match pool for betting
+    if match.has_pool:
+        try:
+            from solders.pubkey import Pubkey
+            from rawl.solana.client import solana_client
+
+            # Look up owner B's wallet (owner A is the authenticated user)
+            owner_b_result = await db.execute(
+                select(User).where(User.id == fighter_b.owner_id)
+            )
+            owner_b = owner_b_result.scalar_one_or_none()
+            if owner_b:
+                fighter_a_pubkey = Pubkey.from_string(user.wallet_address)
+                fighter_b_pubkey = Pubkey.from_string(owner_b.wallet_address)
+                tx_sig = await solana_client.create_match_on_chain(
+                    str(match.id), fighter_a_pubkey, fighter_b_pubkey
+                )
+                match.onchain_match_id = str(match.id).replace("-", "")[:32]
+                await db.commit()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Failed to create on-chain pool",
+                extra={"match_id": str(match.id)},
+            )
+
     # Dispatch match execution
     from rawl.engine.tasks import execute_match
     execute_match.delay(

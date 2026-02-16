@@ -92,8 +92,8 @@ async def recalibrate_fighter(
     fighter.status = "calibrating"
     await db.commit()
 
-    # Kick off calibration again
-    # from rawl.services.elo import run_calibration
-    # run_calibration.delay(str(fighter.id))
+    # Kick off calibration via Celery
+    from rawl.engine.tasks import run_calibration_task
+    run_calibration_task.delay(str(fighter.id))
 
     return {"message": "Recalibration started", "fighter_id": str(fighter_id)}

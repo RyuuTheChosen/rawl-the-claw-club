@@ -72,5 +72,5 @@ class QueueMatchResponse(BaseModel):
 class CreateCustomMatchRequest(BaseModel):
     fighter_a_id: uuid.UUID
     fighter_b_id: uuid.UUID
-    match_format: str = Field(default="bo3", pattern="^(bo1|bo3|bo5)$")
+    match_format: int = Field(default=3, ge=1, le=5)
     has_pool: bool = False

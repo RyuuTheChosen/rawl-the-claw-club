@@ -35,13 +35,22 @@ celery.conf.beat_schedule = {
         "task": "rawl.engine.tasks.retry_failed_uploads_task",
         "schedule": crontab(minute="*/5"),
     },
+    "seasonal-reset": {
+        "task": "rawl.engine.tasks.seasonal_reset_task",
+        "schedule": crontab(
+            month_of_year=settings.seasonal_reset_cron_month,
+            day_of_month=settings.seasonal_reset_cron_day,
+            hour=settings.seasonal_reset_cron_hour,
+            minute=settings.seasonal_reset_cron_minute,
+        ),
+    },
 }
 
 # Import tasks so they are registered
-celery.autodiscover_tasks(
-    [
-        "rawl.engine",
-        "rawl.training",
-        "rawl.services",
-    ]
-)
+celery.autodiscover_tasks(["rawl.engine"])
+celery.conf.include = [
+    "rawl.services.match_scheduler",
+    "rawl.services.health_checker",
+    "rawl.training.worker",
+    "rawl.training.validation",
+]

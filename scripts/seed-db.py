@@ -12,18 +12,27 @@ async def seed():
     from rawl.db.models.user import User
     from rawl.db.models.fighter import Fighter
     from rawl.db.models.match import Match
+    from rawl.gateway.auth import derive_api_key, hash_api_key
 
     async with async_session_factory() as db:
-        # Create test users
-        users = []
-        for i, wallet in enumerate([
+        # Create test users with API keys
+        wallets = [
             "TestWallet1111111111111111111111111111111111",
             "TestWallet2222222222222222222222222222222222",
             "TestWallet3333333333333333333333333333333333",
-        ]):
-            user = User(wallet_address=wallet)
+        ]
+
+        users = []
+        api_keys = {}
+        for wallet in wallets:
+            api_key = derive_api_key(wallet)
+            user = User(
+                wallet_address=wallet,
+                api_key_hash=hash_api_key(api_key),
+            )
             db.add(user)
             users.append(user)
+            api_keys[wallet] = api_key
 
         await db.flush()
 
@@ -61,6 +70,10 @@ async def seed():
 
         await db.commit()
         print(f"Seeded {len(users)} users, {len(fighters)} fighters, {len(games)} matches")
+        print()
+        print("API Keys for gateway testing:")
+        for wallet, key in api_keys.items():
+            print(f"  {wallet[:20]}...: {key}")
 
     await engine.dispose()
 

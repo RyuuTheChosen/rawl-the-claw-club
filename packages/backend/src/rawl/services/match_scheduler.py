@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from rawl.celery_app import celery
+from rawl.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ async def _schedule_async():
 
     from rawl.db.models.fighter import Fighter
     from rawl.db.models.match import Match
+    from rawl.db.models.user import User
     from rawl.db.session import async_session_factory
     from rawl.services.match_queue import get_active_game_ids, try_match, widen_windows
 
@@ -50,7 +52,7 @@ async def _schedule_async():
 
                 match = Match(
                     game_id=game_id,
-                    match_format="bo3",
+                    match_format=settings.default_match_format,
                     fighter_a_id=fighter_a_id,
                     fighter_b_id=fighter_b_id,
                     match_type="ranked",
@@ -70,6 +72,10 @@ async def _schedule_async():
                     },
                 )
 
+                # Create on-chain match pool for betting
+                if match.has_pool:
+                    await _create_onchain_pool(db, match, fighter_a, fighter_b)
+
                 # Dispatch match execution
                 from rawl.engine.tasks import execute_match
 
@@ -78,8 +84,56 @@ async def _schedule_async():
                     game_id,
                     fighter_a.model_path,
                     fighter_b.model_path,
-                    "bo3",
+                    settings.default_match_format,
                 )
             else:
                 # No pair found — widen Elo windows for next tick
                 await widen_windows(game_id)
+
+
+async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> None:
+    """Create on-chain MatchPool PDA so users can place bets."""
+    from sqlalchemy import select
+
+    from rawl.db.models.user import User
+    from rawl.solana.client import solana_client
+
+    try:
+        from solders.pubkey import Pubkey
+
+        # Get owner wallet addresses to use as fighter identifiers on-chain
+        owner_a = await db.execute(select(User).where(User.id == fighter_a.owner_id))
+        owner_b = await db.execute(select(User).where(User.id == fighter_b.owner_id))
+        user_a = owner_a.scalar_one_or_none()
+        user_b = owner_b.scalar_one_or_none()
+
+        if not user_a or not user_b:
+            logger.error(
+                "Fighter owner not found, skipping on-chain pool",
+                extra={"match_id": str(match.id)},
+            )
+            return
+
+        fighter_a_pubkey = Pubkey.from_string(user_a.wallet_address)
+        fighter_b_pubkey = Pubkey.from_string(user_b.wallet_address)
+
+        tx_sig = await solana_client.create_match_on_chain(
+            str(match.id), fighter_a_pubkey, fighter_b_pubkey
+        )
+
+        # Store the onchain reference for the account listener
+        match.onchain_match_id = match.id.hex[:32] if hasattr(match.id, 'hex') else str(match.id).replace("-", "")[:32]
+        await db.commit()
+
+        logger.info(
+            "On-chain match pool created",
+            extra={
+                "match_id": str(match.id),
+                "tx_sig": tx_sig,
+            },
+        )
+    except Exception:
+        logger.exception(
+            "Failed to create on-chain match pool",
+            extra={"match_id": str(match.id)},
+        )

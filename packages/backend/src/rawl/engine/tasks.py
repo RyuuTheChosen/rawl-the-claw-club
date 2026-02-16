@@ -76,10 +76,16 @@ async def _execute_match_async(
 
             # Update Elo ratings
             try:
+                if result.winner == "P1":
+                    winner_id = str(match.fighter_a_id)
+                    loser_id = str(match.fighter_b_id)
+                else:
+                    winner_id = str(match.fighter_b_id)
+                    loser_id = str(match.fighter_a_id)
+
                 await update_elo_after_match(
-                    fighter_a_id=str(match.fighter_a_id),
-                    fighter_b_id=str(match.fighter_b_id),
-                    winner=result.winner,
+                    winner_id=winner_id,
+                    loser_id=loser_id,
                     db_session=db,
                 )
             except Exception:
@@ -99,6 +105,62 @@ async def _execute_match_async(
                 match.cancel_reason = "engine_failure"
             await db.commit()
             logger.warning("Match failed or was cancelled", extra={"match_id": match_id})
+
+
+@celery.task(name="rawl.engine.tasks.run_calibration_task", bind=True)
+def run_calibration_task(self, fighter_id: str):
+    """Celery task: run calibration matches for a fighter."""
+    import asyncio
+
+    asyncio.run(_run_calibration_async(fighter_id))
+
+
+async def _run_calibration_async(fighter_id: str):
+    from rawl.db.session import async_session_factory
+    from rawl.services.elo import run_calibration
+
+    async with async_session_factory() as db:
+        success = await run_calibration(fighter_id, db)
+        logger.info(
+            "Calibration task finished",
+            extra={"fighter_id": fighter_id, "success": success},
+        )
+
+
+@celery.task(name="rawl.engine.tasks.seasonal_reset_task")
+def seasonal_reset_task():
+    """Celery Beat task: quarterly seasonal reset for all ready fighters."""
+    import asyncio
+
+    asyncio.run(_seasonal_reset_async())
+
+
+async def _seasonal_reset_async():
+    from sqlalchemy import select
+
+    from rawl.db.models.fighter import Fighter
+    from rawl.db.session import async_session_factory
+    from rawl.services.elo import get_division, seasonal_reset
+
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(Fighter).where(Fighter.status == "ready")
+        )
+        fighters = result.scalars().all()
+
+        reset_count = 0
+        for fighter in fighters:
+            old_elo = fighter.elo_rating
+            fighter.elo_rating = seasonal_reset(old_elo)
+            fighter.division_tier = get_division(fighter.elo_rating)
+            reset_count += 1
+
+        await db.commit()
+
+        logger.info(
+            "Seasonal reset completed",
+            extra={"fighters_reset": reset_count},
+        )
 
 
 @celery.task(name="rawl.engine.tasks.retry_failed_uploads_task")
