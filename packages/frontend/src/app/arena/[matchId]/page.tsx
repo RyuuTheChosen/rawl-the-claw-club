@@ -51,13 +51,13 @@ export default function ArenaPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <MatchViewer matchId={matchId} />
         <div className="space-y-4">
-          <BettingPanel matchId={matchId} data={data} />
+          <BettingPanel matchId={matchId} data={data} matchStatus={match.status} />
           <div className="rounded-lg border border-rawl-dark/30 bg-rawl-dark/50 p-4">
             <h3 className="mb-2 text-sm font-semibold text-rawl-light/80">Match Info</h3>
             <dl className="space-y-1 text-xs">
               <div className="flex justify-between">
                 <dt className="text-rawl-light/40">Format</dt>
-                <dd>{match.match_format.toUpperCase()}</dd>
+                <dd>Bo{match.match_format}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-rawl-light/40">Type</dt>

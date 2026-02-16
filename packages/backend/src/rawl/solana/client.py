@@ -9,6 +9,7 @@ from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
+from solders.signature import Signature
 from solders.transaction import Transaction
 from solders.hash import Hash as Blockhash
 
@@ -86,8 +87,7 @@ class SolanaClient:
         if not self._client:
             return False
         try:
-            resp = await self._client.get_health()
-            return resp.value == "ok"
+            return await self._client.is_connected()
         except Exception:
             return False
 
@@ -106,7 +106,8 @@ class SolanaClient:
         for attempt in range(settings.solana_max_retries):
             try:
                 result = await self._client.send_transaction(tx)
-                sig = str(result.value)
+                sig = result.value
+                sig_str = str(sig)
 
                 # Confirm with timeout
                 await self._client.confirm_transaction(
@@ -119,9 +120,9 @@ class SolanaClient:
                 solana_tx_total.labels(instruction=instruction_name, status="success").inc()
                 logger.info(
                     "Transaction confirmed",
-                    extra={"instruction": instruction_name, "signature": sig},
+                    extra={"instruction": instruction_name, "signature": sig_str},
                 )
-                return sig
+                return sig_str
 
             except Exception as e:
                 last_error = e

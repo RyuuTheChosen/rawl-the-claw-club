@@ -1,4 +1,4 @@
-const GATEWAY_BASE = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000/gateway";
+const GATEWAY_BASE = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080/gateway";
 
 async function gatewayRequest<T>(
   path: string,

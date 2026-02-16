@@ -73,7 +73,7 @@ def build_create_match_ix(
     )
     accounts = [
         AccountMeta(match_pool_pda, is_signer=False, is_writable=True),
-        AccountMeta(vault_pda, is_signer=False, is_writable=False),
+        AccountMeta(vault_pda, is_signer=False, is_writable=True),
         AccountMeta(platform_config_pda, is_signer=False, is_writable=False),
         AccountMeta(creator, is_signer=True, is_writable=True),
         AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -87,7 +87,6 @@ def build_place_bet_ix(
     bettor: Pubkey,
     side: int,
     amount: int,
-    vault_bump: int,
 ) -> Instruction:
     mid_bytes = match_id_to_bytes(match_id)
     match_pool_pda, _ = derive_match_pool_pda(match_id)

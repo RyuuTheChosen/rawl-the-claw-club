@@ -184,25 +184,52 @@ class AccountListener:
         )
 
     async def _handle_bet_update(self, data: bytes) -> None:
-        """Update PostgreSQL bet record from on-chain Bet state."""
-        from rawl.solana.deserialize import deserialize_bet
+        """Update or create PostgreSQL bet record from on-chain Bet state."""
+        from rawl.solana.deserialize import deserialize_bet, BetSide
         from rawl.db.session import async_session_factory
         from rawl.db.models.bet import Bet
+        from rawl.db.models.match import Match
         from sqlalchemy import select
         from datetime import datetime, timezone
 
         bet_account = deserialize_bet(data)
         bettor_str = str(bet_account.bettor)
+        match_id_hex = bet_account.match_id[:16].hex()
 
         async with async_session_factory() as db:
+            # Try to find existing bet by wallet + match
+            match_result = await db.execute(
+                select(Match).where(Match.onchain_match_id == match_id_hex)
+            )
+            match = match_result.scalar_one_or_none()
+            if not match:
+                return
+
             result = await db.execute(
                 select(Bet).where(
+                    Bet.match_id == match.id,
                     Bet.wallet_address == bettor_str,
-                    Bet.onchain_bet_pda.is_not(None),
                 )
             )
             bet = result.scalar_one_or_none()
+
             if not bet:
+                # Create a new bet record from on-chain data
+                side = "a" if bet_account.side == BetSide.SIDE_A else "b"
+                bet = Bet(
+                    match_id=match.id,
+                    wallet_address=bettor_str,
+                    side=side,
+                    amount_sol=bet_account.amount / 1e9,
+                    status="claimed" if bet_account.claimed else "confirmed",
+                    claimed_at=datetime.now(timezone.utc) if bet_account.claimed else None,
+                )
+                db.add(bet)
+                await db.commit()
+                logger.info(
+                    "Bet record created from on-chain data",
+                    extra={"match_id": str(match.id), "bettor": bettor_str},
+                )
                 return
 
             if bet_account.claimed and bet.status != "claimed":
@@ -220,9 +247,11 @@ class AccountListener:
         from rawl.solana.deserialize import MATCH_POOL_DISC
 
         try:
+            from solders.pubkey import Pubkey
+
             async with AsyncClient(settings.solana_rpc_url) as client:
                 resp = await client.get_program_accounts(
-                    pubkey=settings.program_id,
+                    pubkey=Pubkey.from_string(settings.program_id),
                     commitment=Confirmed,
                     encoding="base64",
                 )

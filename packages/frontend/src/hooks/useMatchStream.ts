@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MatchDataMessage } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export function useMatchDataStream(matchId: string | null) {
   const [data, setData] = useState<MatchDataMessage | null>(null);

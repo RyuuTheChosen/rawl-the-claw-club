@@ -20,7 +20,7 @@ export const PLATFORM_FEE_BPS = 300; // 3%
 export const MATCH_TIMEOUT_SECONDS = 1800; // 30 minutes
 export const CLAIM_WINDOW_DAYS = 30;
 
-export const MATCH_FORMATS = ["bo1", "bo3", "bo5"] as const;
+export const MATCH_FORMATS = [1, 3, 5] as const;
 export type MatchFormat = (typeof MATCH_FORMATS)[number];
 
 export const TRAINING_TIERS = ["free", "standard", "pro"] as const;

@@ -16,8 +16,9 @@ pub struct CreateMatch<'info> {
     )]
     pub match_pool: Account<'info, MatchPool>,
 
-    /// CHECK: Vault PDA for holding SOL bets
+    /// CHECK: Vault PDA for holding SOL bets — initialized as program-owned
     #[account(
+        mut,
         seeds = [VAULT_SEED, &match_id],
         bump,
     )]
@@ -43,6 +44,27 @@ pub fn handler(
 ) -> Result<()> {
     require!(!ctx.accounts.platform_config.paused, RawlError::PlatformPaused);
 
+    // Create the vault PDA as a program-owned account so that
+    // claim_payout/refund/withdraw can directly manipulate lamports.
+    let vault_bump = ctx.bumps.vault;
+    let vault_seeds: &[&[u8]] = &[VAULT_SEED, &match_id, &[vault_bump]];
+    let rent = Rent::get()?;
+    anchor_lang::solana_program::program::invoke_signed(
+        &anchor_lang::solana_program::system_instruction::create_account(
+            &ctx.accounts.creator.key(),
+            &ctx.accounts.vault.key(),
+            rent.minimum_balance(0),
+            0,
+            ctx.program_id,
+        ),
+        &[
+            ctx.accounts.creator.to_account_info(),
+            ctx.accounts.vault.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+        &[vault_seeds],
+    )?;
+
     let pool = &mut ctx.accounts.match_pool;
     pool.match_id = match_id;
     pool.fighter_a = fighter_a;
@@ -62,7 +84,7 @@ pub fn handler(
     pool.resolve_timestamp = 0;
     pool.cancel_timestamp = 0;
     pool.bump = ctx.bumps.match_pool;
-    pool.vault_bump = ctx.bumps.vault;
+    pool.vault_bump = vault_bump;
 
     Ok(())
 }

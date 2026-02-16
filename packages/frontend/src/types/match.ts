@@ -1,7 +1,7 @@
 export interface Match {
   id: string;
   game_id: string;
-  match_format: string;
+  match_format: number;
   fighter_a_id: string;
   fighter_b_id: string;
   winner_id: string | null;
