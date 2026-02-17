@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
 import Link from "next/link";
 import { Swords, Trophy, X } from "lucide-react";
 import { Fighter, PretrainedModel } from "@/types";
@@ -150,7 +151,7 @@ function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
       const message = `Sign to register with Rawl: ${Date.now()}`;
       const encoded = new TextEncoder().encode(message);
       const signatureBytes = await signMessage(encoded);
-      const signature = btoa(String.fromCharCode(...signatureBytes));
+      const signature = bs58.encode(signatureBytes);
       const walletAddress = publicKey.toBase58();
 
       const res = await gateway.register(walletAddress, signature, message);
