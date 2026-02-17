@@ -4,6 +4,8 @@ export interface Match {
   match_format: number;
   fighter_a_id: string;
   fighter_b_id: string;
+  fighter_a_name: string | null;
+  fighter_b_name: string | null;
   winner_id: string | null;
   status: "open" | "locked" | "resolved" | "cancelled";
   match_type: "ranked" | "challenge" | "exhibition";

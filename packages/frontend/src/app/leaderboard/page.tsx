@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { LeaderboardEntry } from "@/types";
 import { getLeaderboard } from "@/lib/api";
+import { usePolling } from "@/hooks/usePolling";
 import { ArcadeLoader } from "@/components/ArcadeLoader";
 import { PageTransition } from "@/components/PageTransition";
 import { DivisionBadge } from "@/components/DivisionBadge";
@@ -21,24 +22,32 @@ const rankStyle: Record<number, string> = {
 
 export default function LeaderboardPage() {
   const [game, setGame] = useState(GAMES[0]);
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
-    getLeaderboard(game, 50)
-      .then(setEntries)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [game]);
+  const fetcher = useCallback(
+    () => getLeaderboard(game, 50),
+    [game],
+  );
+
+  const { data, isPolling } = usePolling<LeaderboardEntry[]>({
+    fetcher,
+    interval: 10_000,
+    key: game,
+  });
+
+  const entries = data ?? [];
 
   return (
     <PageTransition>
       <div className="mx-auto max-w-4xl px-4 py-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="font-pixel text-base text-neon-orange text-glow-orange sm:text-lg">
-            HIGH SCORES
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-pixel text-base text-neon-orange text-glow-orange sm:text-lg">
+              HIGH SCORES
+            </h1>
+            {isPolling && (
+              <span className="h-2 w-2 animate-pulse rounded-full bg-neon-green" />
+            )}
+          </div>
           <Tabs value={game} onValueChange={setGame}>
             <TabsList>
               {GAMES.map((g) => (
@@ -50,7 +59,7 @@ export default function LeaderboardPage() {
           </Tabs>
         </div>
 
-        {loading ? (
+        {data === null ? (
           <ArcadeLoader text="LOADING SCORES" />
         ) : entries.length === 0 ? (
           <div className="flex min-h-[40vh] items-center justify-center">

@@ -38,11 +38,11 @@ export function MatchCard({ match }: MatchCardProps) {
         {/* VS layout */}
         <div className="mb-3 flex items-center justify-between">
           <span className="font-mono text-sm text-neon-cyan">
-            {match.fighter_a_id.slice(0, 8)}
+            {match.fighter_a_name ?? match.fighter_a_id.slice(0, 8)}
           </span>
           <span className="font-pixel text-[10px] text-neon-orange">VS</span>
           <span className="font-mono text-sm text-neon-pink">
-            {match.fighter_b_id.slice(0, 8)}
+            {match.fighter_b_name ?? match.fighter_b_id.slice(0, 8)}
           </span>
         </div>
 

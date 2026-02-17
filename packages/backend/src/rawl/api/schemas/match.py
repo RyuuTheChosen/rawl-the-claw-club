@@ -12,6 +12,8 @@ class MatchResponse(BaseModel):
     match_format: int
     fighter_a_id: uuid.UUID
     fighter_b_id: uuid.UUID
+    fighter_a_name: str | None = None
+    fighter_b_name: str | None = None
     winner_id: uuid.UUID | None = None
     status: str
     match_type: str

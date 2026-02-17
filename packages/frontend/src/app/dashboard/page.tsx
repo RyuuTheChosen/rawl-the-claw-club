@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
 import Link from "next/link";
@@ -8,7 +8,8 @@ import { Swords } from "lucide-react";
 import { Fighter, PretrainedModel } from "@/types";
 import { useWalletStore } from "@/stores/walletStore";
 import * as gateway from "@/lib/gateway";
-import { getFighters, getPretrainedModels } from "@/lib/api";
+import { getFighters, getMatches, getPretrainedModels } from "@/lib/api";
+import { usePolling } from "@/hooks/usePolling";
 import { ArcadeCard } from "@/components/ArcadeCard";
 import { ArcadeButton } from "@/components/ArcadeButton";
 import { ArcadeLoader } from "@/components/ArcadeLoader";
@@ -187,29 +188,60 @@ function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
 export default function DashboardPage() {
   const { connected, publicKey } = useWallet();
   const { apiKey } = useWalletStore();
-  const [fighters, setFighters] = useState<Fighter[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAdoptForm, setShowAdoptForm] = useState(false);
   const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
+  const [matchFoundMap, setMatchFoundMap] = useState<Record<string, string>>({});
   const [queuingId, setQueuingId] = useState<string | null>(null);
 
   const walletAddress = publicKey?.toBase58();
 
-  const refreshFighters = () => {
-    if (!walletAddress) return;
-    getFighters({ owner: walletAddress })
-      .then((res) => setFighters(res.items))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
+  // Fighter polling — must be before early return
+  const fighterFetcher = useCallback(async () => {
+    if (!walletAddress) return [];
+    const res = await getFighters({ owner: walletAddress });
+    return res.items;
+  }, [walletAddress]);
 
+  const {
+    data: fighters,
+    refresh: refreshFighters,
+  } = usePolling<Fighter[]>({
+    fetcher: fighterFetcher,
+    interval: 10_000,
+    enabled: connected && !!walletAddress,
+    key: walletAddress ?? "",
+  });
+
+  // Match-found detection for queued fighters
   useEffect(() => {
-    if (!connected || !walletAddress) {
-      setLoading(false);
-      return;
-    }
-    refreshFighters();
-  }, [connected, walletAddress]);
+    if (queuedIds.size === 0) return;
+
+    const checkMatches = async () => {
+      for (const fighterId of queuedIds) {
+        try {
+          const res = await getMatches({ fighter_id: fighterId, limit: 1 });
+          if (res.items.length > 0) {
+            const match = res.items[0];
+            // Only detect matches created after queuing (recent, open or locked)
+            if (match.status === "open" || match.status === "locked") {
+              setMatchFoundMap((prev) => ({ ...prev, [fighterId]: match.id }));
+              setQueuedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(fighterId);
+                return next;
+              });
+            }
+          }
+        } catch {
+          // Silently continue polling
+        }
+      }
+    };
+
+    checkMatches();
+    const timer = setInterval(checkMatches, 10_000);
+    return () => clearInterval(timer);
+  }, [queuedIds]);
 
   if (!connected) {
     return (
@@ -223,6 +255,9 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const fighterList = fighters ?? [];
+  const loading = fighters === null;
 
   const handleQueue = async (fighter: Fighter) => {
     if (!apiKey) return;
@@ -252,7 +287,7 @@ export default function DashboardPage() {
               {publicKey?.toBase58().slice(0, 8)}...{publicKey?.toBase58().slice(-4)}
             </p>
           </div>
-          {fighters.length > 0 && (
+          {fighterList.length > 0 && (
             <ArcadeButton
               variant={showAdoptForm ? "ghost" : "outline"}
               size="sm"
@@ -265,7 +300,7 @@ export default function DashboardPage() {
 
         {!apiKey && <RegisterBanner onRegistered={refreshFighters} />}
 
-        {showAdoptForm && fighters.length > 0 && (
+        {showAdoptForm && fighterList.length > 0 && (
           <ArcadeCard className="mb-6" hover={false}>
             <h3 className="mb-3 font-pixel text-[10px]">DEPLOY BASELINE FIGHTER</h3>
             <AdoptForm
@@ -278,11 +313,28 @@ export default function DashboardPage() {
           </ArcadeCard>
         )}
 
+        {/* Match-found banners */}
+        {Object.entries(matchFoundMap).map(([fighterId, matchId]) => {
+          const fighter = fighterList.find((f) => f.id === fighterId);
+          return (
+            <Link key={fighterId} href={`/arena/${matchId}`}>
+              <div className="mb-4 animate-pulse rounded-lg border border-neon-orange/40 bg-neon-orange/10 px-4 py-3 transition-all hover:bg-neon-orange/20">
+                <span className="font-pixel text-[10px] text-neon-orange">
+                  MATCH FOUND{fighter ? ` — ${fighter.name}` : ""}
+                </span>
+                <span className="ml-2 font-pixel text-[9px] text-muted-foreground">
+                  TAP TO WATCH
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+
         <h2 className="mb-4 font-pixel text-xs text-foreground">YOUR FIGHTERS</h2>
 
         {loading ? (
           <ArcadeLoader text="LOADING FIGHTERS" />
-        ) : fighters.length === 0 ? (
+        ) : fighterList.length === 0 ? (
           <ArcadeCard hover={false} glowColor="orange">
             <h3 className="mb-1 font-pixel text-xs">DEPLOY A STARTER</h3>
             <p className="mb-4 text-sm text-muted-foreground">
@@ -293,7 +345,7 @@ export default function DashboardPage() {
           </ArcadeCard>
         ) : (
           <StaggeredList className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {fighters.map((fighter) => (
+            {fighterList.map((fighter) => (
               <ArcadeCard key={fighter.id}>
                 <div className="mb-2 flex items-start justify-between">
                   <Link
@@ -325,7 +377,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {fighter.status === "ready" && (
+                {matchFoundMap[fighter.id] ? (
+                  <Link href={`/arena/${matchFoundMap[fighter.id]}`}>
+                    <div className="w-full animate-pulse rounded border border-neon-orange/40 bg-neon-orange/10 py-1.5 text-center font-pixel text-[9px] text-neon-orange">
+                      MATCH FOUND — TAP TO WATCH
+                    </div>
+                  </Link>
+                ) : fighter.status === "ready" && (
                   queuedIds.has(fighter.id) ? (
                     <div className="w-full rounded border border-neon-green/30 bg-neon-green/10 py-1.5 text-center font-pixel text-[9px] text-neon-green">
                       IN QUEUE — WAITING FOR OPPONENT
