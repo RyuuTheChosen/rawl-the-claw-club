@@ -32,10 +32,9 @@ async def submit_fighter(
 
     Rate limit: 3/wallet/hour, 1 concurrent validation.
     """
-    # Rate limiting: 3/wallet/hour
+    # Rate limiting: 3/wallet/hour (atomic Lua check)
     rate_key = f"ratelimit:submit:{wallet}"
-    current_count = await redis_pool.get(rate_key)
-    if current_count is not None and int(current_count) >= SUBMIT_RATE_LIMIT:
+    if not await redis_pool.rate_limit_check(rate_key, SUBMIT_RATE_LIMIT, SUBMIT_RATE_WINDOW):
         ttl = await redis_pool.ttl(rate_key)
         return JSONResponse(
             status_code=429,
@@ -67,11 +66,6 @@ async def submit_fighter(
     db.add(fighter)
     await db.commit()
     await db.refresh(fighter)
-
-    # Increment rate limit counter
-    count = await redis_pool.incr(rate_key)
-    if count == 1:
-        await redis_pool.expire(rate_key, SUBMIT_RATE_WINDOW)
 
     # Kick off async validation (Celery task)
     from rawl.training.validation import validate_model

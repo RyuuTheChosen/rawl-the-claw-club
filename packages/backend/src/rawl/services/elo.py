@@ -101,7 +101,7 @@ async def update_elo_after_match(
     loser.losses += 1
     loser.division_tier = get_division(loser_new)
 
-    await db_session.commit()
+    await db_session.flush()
 
     logger.info(
         "Elo updated",

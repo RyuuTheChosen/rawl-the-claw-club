@@ -106,6 +106,7 @@ class SolanaClient:
         self,
         tx: Transaction,
         instruction_name: str,
+        last_valid_block_height: int | None = None,
     ) -> str:
         """Send a transaction with retry and backoff. Returns signature string."""
         if not self._client:
@@ -125,7 +126,7 @@ class SolanaClient:
                     sig,
                     commitment=Confirmed,
                     sleep_seconds=1,
-                    last_valid_block_height=None,
+                    last_valid_block_height=last_valid_block_height,
                 )
 
                 solana_tx_total.labels(instruction=instruction_name, status="success").inc()
@@ -161,6 +162,7 @@ class SolanaClient:
 
         resp = await self._client.get_latest_blockhash()
         blockhash = resp.value.blockhash
+        last_valid_block_height = resp.value.last_valid_block_height
 
         tx = Transaction.new_signed_with_payer(
             [ix],
@@ -168,7 +170,9 @@ class SolanaClient:
             [self.oracle_keypair],
             blockhash,
         )
-        return await self.send_and_confirm_tx(tx, instruction_name)
+        return await self.send_and_confirm_tx(
+            tx, instruction_name, last_valid_block_height=last_valid_block_height
+        )
 
     # --- Account getters ---
 

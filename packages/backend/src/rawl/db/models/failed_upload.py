@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +18,7 @@ class FailedUpload(Base):
         UUID(as_uuid=True), ForeignKey("matches.id"), nullable=False, index=True
     )
     s3_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    payload: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BetResponse(BaseModel):
@@ -18,8 +19,18 @@ class BetResponse(BaseModel):
     claimed_at: datetime | None = None
 
 
+_BASE58_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+
+
 class RecordBetRequest(BaseModel):
     wallet_address: str = Field(..., max_length=44)
     side: str = Field(..., pattern="^[ab]$")
     amount_sol: float = Field(..., gt=0)
     tx_signature: str = Field(..., max_length=128)
+
+    @field_validator("wallet_address")
+    @classmethod
+    def validate_wallet_base58(cls, v: str) -> str:
+        if not _BASE58_RE.fullmatch(v):
+            raise ValueError("Invalid wallet address: must be base58 (32-44 chars)")
+        return v

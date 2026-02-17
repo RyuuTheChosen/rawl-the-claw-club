@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC
 
-from rawl.celery_app import celery, celery_async_run
+from rawl.celery_app import celery, celery_async_run, get_sync_redis
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +22,19 @@ def execute_match(
 
     Sync wrapper around async match runner following the pattern in health_checker.py.
     On success: updates Elo via services/elo.py, updates Match status.
+    Uses a Redis distributed lock to prevent double execution with acks_late.
     """
-    celery_async_run(
-        _execute_match_async(match_id, game_id, fighter_a_model, fighter_b_model, match_format)
-    )
+    r = get_sync_redis()
+    lock_key = f"match-lock:{match_id}"
+    if not r.set(lock_key, "1", nx=True, ex=3600):
+        logger.info("Match already running, skipping duplicate", extra={"match_id": match_id})
+        return
+    try:
+        celery_async_run(
+            _execute_match_async(match_id, game_id, fighter_a_model, fighter_b_model, match_format)
+        )
+    finally:
+        r.delete(lock_key)
 
 
 async def _execute_match_async(
@@ -61,37 +70,40 @@ async def _execute_match_async(
             return
 
         if result:
-            match.status = "resolved"
-            match.match_hash = result.match_hash
-            match.hash_version = result.hash_version
-            match.adapter_version = result.adapter_version
-            match.round_history = str(result.round_history)
-            match.resolved_at = datetime.now(UTC)
+            # Use savepoint so match result + Elo update commit atomically
+            async with db.begin_nested():
+                match.status = "resolved"
+                match.match_hash = result.match_hash
+                match.hash_version = result.hash_version
+                match.adapter_version = result.adapter_version
+                match.round_history = str(result.round_history)
+                match.resolved_at = datetime.now(UTC)
 
-            # Determine winner_id
-            if result.winner == "P1":
-                match.winner_id = match.fighter_a_id
-            elif result.winner == "P2":
-                match.winner_id = match.fighter_b_id
-
-            await db.commit()
-
-            # Update Elo ratings
-            try:
+                # Determine winner_id
                 if result.winner == "P1":
+                    match.winner_id = match.fighter_a_id
                     winner_id = str(match.fighter_a_id)
                     loser_id = str(match.fighter_b_id)
-                else:
+                elif result.winner == "P2":
+                    match.winner_id = match.fighter_b_id
                     winner_id = str(match.fighter_b_id)
                     loser_id = str(match.fighter_a_id)
+                else:
+                    logger.error(
+                        "Invalid winner value",
+                        extra={"match_id": match_id, "winner": result.winner},
+                    )
+                    match.status = "cancelled"
+                    match.cancel_reason = "invalid_winner"
+                    await db.commit()
+                    return
 
                 await update_elo_after_match(
                     winner_id=winner_id,
                     loser_id=loser_id,
                     db_session=db,
                 )
-            except Exception:
-                logger.exception("Elo update failed", extra={"match_id": match_id})
+            await db.commit()
 
             logger.info(
                 "Match completed successfully",

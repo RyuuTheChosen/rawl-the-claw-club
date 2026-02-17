@@ -52,6 +52,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    from rawl.api.middleware import RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware)
+
     # Register routers
     from rawl.api.router import api_router
     from rawl.gateway.router import gateway_router

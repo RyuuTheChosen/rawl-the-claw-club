@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 _session = aioboto3.Session()
 
-RETRY_DELAYS = [30, 60, 120, 240, 480]
+RETRY_DELAYS = [2, 5, 10]
 
 
 async def _get_client():

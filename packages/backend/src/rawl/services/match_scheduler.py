@@ -94,7 +94,16 @@ async def _schedule_async():
 
                 # Create on-chain match pool for betting
                 if match.has_pool:
-                    await _create_onchain_pool(db, match, fighter_a, fighter_b)
+                    pool_ok = await _create_onchain_pool(db, match, fighter_a, fighter_b)
+                    if not pool_ok:
+                        match.status = "cancelled"
+                        match.cancel_reason = "pool_creation_failed"
+                        await db.commit()
+                        logger.error(
+                            "Match cancelled: on-chain pool creation failed",
+                            extra={"match_id": str(match.id)},
+                        )
+                        continue
 
                 # Dispatch match execution
                 from rawl.engine.tasks import execute_match
@@ -111,8 +120,11 @@ async def _schedule_async():
                 await widen_windows(game_id)
 
 
-async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> None:
-    """Create on-chain MatchPool PDA so users can place bets."""
+async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> bool:
+    """Create on-chain MatchPool PDA so users can place bets.
+
+    Returns True on success, False on failure.
+    """
     from sqlalchemy import select
 
     from rawl.db.models.user import User
@@ -133,7 +145,7 @@ async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> None:
                 "Fighter owner not found, skipping on-chain pool",
                 extra={"match_id": str(match.id)},
             )
-            return
+            return False
 
         fighter_a_pubkey = Pubkey.from_string(user_a.wallet_address)
         fighter_b_pubkey = Pubkey.from_string(user_b.wallet_address)
@@ -153,8 +165,10 @@ async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> None:
                 "tx_sig": tx_sig,
             },
         )
+        return True
     except Exception:
         logger.exception(
             "Failed to create on-chain match pool",
             extra={"match_id": str(match.id)},
         )
+        return False

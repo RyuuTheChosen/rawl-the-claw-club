@@ -76,3 +76,6 @@ models/
 
 # Celery beat schedule files
 celerybeat-schedule*
+
+.vercel
+.env*.local

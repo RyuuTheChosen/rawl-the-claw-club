@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,6 +11,8 @@ from rawl.db.models.bet import Bet
 from rawl.db.models.match import Match
 from rawl.dependencies import DbSession
 from rawl.solana.pda import derive_bet_pda
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["bets"])
 
@@ -67,9 +70,13 @@ async def record_bet(
     try:
         from solders.pubkey import Pubkey
 
-        _, _ = derive_bet_pda(str(match_id), Pubkey.from_string(body.wallet_address))
-        bet_pda_str = str(derive_bet_pda(str(match_id), Pubkey.from_string(body.wallet_address))[0])
+        pda, _ = derive_bet_pda(str(match_id), Pubkey.from_string(body.wallet_address))
+        bet_pda_str = str(pda)
     except Exception:
+        logger.warning(
+            "PDA derivation failed for bet",
+            extra={"match_id": str(match_id), "wallet": body.wallet_address},
+        )
         bet_pda_str = None
 
     bet = Bet(

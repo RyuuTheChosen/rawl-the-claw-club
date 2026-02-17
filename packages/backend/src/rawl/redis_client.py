@@ -32,6 +32,15 @@ class RedisPool:
             await self._pool.aclose()
             self._pool = None
 
+    def reset(self) -> None:
+        """Drop the cached client without closing (for Celery workers).
+
+        The old connection's event loop is dead, so we can't await aclose().
+        Just dereference it and let the next .client access create a fresh one
+        on the current event loop.
+        """
+        self._pool = None
+
     # --- Stream helpers ---
 
     async def stream_publish(self, stream: str, data: dict, maxlen: int = 1000) -> str:
@@ -103,6 +112,43 @@ class RedisPool:
     async def delete(self, *keys):
         """Delete one or more keys."""
         return await self.client.delete(*keys)
+
+    # --- Lua script helpers ---
+
+    _RATE_LIMIT_LUA = """
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local ttl = tonumber(ARGV[2])
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, ttl)
+end
+return current
+"""
+
+    async def rate_limit_check(self, key: str, limit: int, window_seconds: int) -> bool:
+        """Atomic rate limit check. Returns True if request is within limit."""
+        count = await self.client.eval(self._RATE_LIMIT_LUA, 1, key, limit, window_seconds)
+        return count <= limit
+
+    _ATOMIC_PAIR_REMOVE_LUA = """
+local key = KEYS[1]
+local a = ARGV[1]
+local b = ARGV[2]
+if redis.call('ZSCORE', key, a) and redis.call('ZSCORE', key, b) then
+    redis.call('ZREM', key, a, b)
+    return 1
+end
+return 0
+"""
+
+    async def atomic_pair_remove(self, key: str, member_a: str, member_b: str) -> bool:
+        """Atomically verify both members exist in sorted set and remove them.
+
+        Returns True if both were present and removed, False otherwise.
+        """
+        result = await self.client.eval(self._ATOMIC_PAIR_REMOVE_LUA, 1, key, member_a, member_b)
+        return result == 1
 
 
 redis_pool = RedisPool()

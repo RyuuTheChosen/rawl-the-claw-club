@@ -112,7 +112,7 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
                 client = docker.from_env()
                 container = client.containers.run(
                     "python:3.11-slim",
-                    command=f"python -c \"from stable_baselines3 import PPO; m=PPO.load('{tmp_path}'); print('OK')\"",
+                    command=["python", "-c", f"from stable_baselines3 import PPO; m=PPO.load('{tmp_path}'); print('OK')"],
                     volumes={tmp_path: {"bind": tmp_path, "mode": "ro"}},
                     network_disabled=True,
                     read_only=True,

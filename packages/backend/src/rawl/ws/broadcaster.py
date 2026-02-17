@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid as _uuid
 from collections import defaultdict
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -41,6 +42,12 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
     Each message = raw JPEG bytes (10-30 KB at 256x256), no JSON wrapper.
     Connection limit: 2 concurrent per IP.
     """
+    try:
+        _uuid.UUID(match_id)
+    except ValueError:
+        await websocket.close(code=4000, reason="Invalid match_id format")
+        return
+
     client_ip = _get_client_ip(websocket)
 
     if _ip_video_count[client_ip] >= VIDEO_CONNECTIONS_PER_IP:
@@ -66,7 +73,8 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
                 messages = await redis_pool.stream_read(
                     stream_key, last_id=last_id, count=1, block=1000
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning("Redis stream read error (video)", extra={"match_id": match_id, "error": str(e)})
                 await asyncio.sleep(0.1)
                 continue
 
@@ -104,6 +112,12 @@ async def data_channel(websocket: WebSocket, match_id: str) -> None:
 
     Connection limit: 5 concurrent per IP.
     """
+    try:
+        _uuid.UUID(match_id)
+    except ValueError:
+        await websocket.close(code=4000, reason="Invalid match_id format")
+        return
+
     client_ip = _get_client_ip(websocket)
 
     if _ip_data_count[client_ip] >= DATA_CONNECTIONS_PER_IP:
@@ -129,7 +143,8 @@ async def data_channel(websocket: WebSocket, match_id: str) -> None:
                 messages = await redis_pool.stream_read(
                     stream_key, last_id=last_id, count=1, block=1000
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning("Redis stream read error (data)", extra={"match_id": match_id, "error": str(e)})
                 await asyncio.sleep(0.1)
                 continue
 

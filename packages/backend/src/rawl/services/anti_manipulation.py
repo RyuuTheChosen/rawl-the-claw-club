@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid as _uuid
 from collections import defaultdict
 
 from sqlalchemy import func, select
@@ -20,23 +21,26 @@ async def check_betting_concentration(match_id: str, db_session) -> list[str]:
     Returns list of alert messages.
     """
     from rawl.db.models.bet import Bet
-    from rawl.db.models.match import Match
 
     alerts = []
 
-    result = await db_session.execute(select(Match).where(Match.id == match_id))
-    match = result.scalar_one_or_none()
-    if not match:
-        return alerts
+    match_uuid = _uuid.UUID(match_id) if isinstance(match_id, str) else match_id
 
-    for side, side_total in [("a", match.side_a_total), ("b", match.side_b_total)]:
+    # Compute side totals from actual bet records (not eventually-consistent match fields)
+    for side in ("a", "b"):
+        total_result = await db_session.execute(
+            select(func.sum(Bet.amount_sol))
+            .where(Bet.match_id == match_uuid, Bet.side == side)
+        )
+        side_total = total_result.scalar() or 0.0
+
         if side_total < CONCENTRATION_POOL_THRESHOLD_SOL:
             continue
 
         # Find largest single-wallet contribution
         result = await db_session.execute(
             select(Bet.wallet_address, func.sum(Bet.amount_sol))
-            .where(Bet.match_id == match_id, Bet.side == side)
+            .where(Bet.match_id == match_uuid, Bet.side == side)
             .group_by(Bet.wallet_address)
             .order_by(func.sum(Bet.amount_sol).desc())
             .limit(1)

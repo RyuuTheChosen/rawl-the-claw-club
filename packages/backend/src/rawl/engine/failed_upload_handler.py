@@ -11,7 +11,7 @@ from rawl.s3_client import upload_bytes
 logger = logging.getLogger(__name__)
 
 
-async def persist_failed_upload(match_id: str, s3_key: str) -> None:
+async def persist_failed_upload(match_id: str, s3_key: str, payload: bytes | None = None) -> None:
     """Create a FailedUpload row for later retry."""
     from rawl.db.models.failed_upload import FailedUpload
     from rawl.db.session import worker_session_factory
@@ -20,6 +20,7 @@ async def persist_failed_upload(match_id: str, s3_key: str) -> None:
         entry = FailedUpload(
             match_id=match_id,
             s3_key=s3_key,
+            payload=payload,
             retry_count=0,
             status="failed",
         )
@@ -43,6 +44,7 @@ async def retry_failed_uploads() -> int:
             select(FailedUpload).where(
                 FailedUpload.status == "failed",
                 FailedUpload.retry_count < 5,
+                FailedUpload.payload.isnot(None),
             )
         )
         entries = result.scalars().all()
@@ -53,9 +55,7 @@ async def retry_failed_uploads() -> int:
             await db.commit()
 
             try:
-                # Try to download the hash payload from local temp or re-generate
-                # For now, we just attempt the upload with a sentinel
-                ok = await upload_bytes(entry.s3_key, b"", "application/json")
+                ok = await upload_bytes(entry.s3_key, entry.payload, "application/json")
                 if ok:
                     entry.status = "resolved"
                     entry.resolved_at = datetime.now(UTC)

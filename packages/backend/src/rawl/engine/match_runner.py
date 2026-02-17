@@ -91,6 +91,13 @@ async def run_match(
         # Validation passed — lock the match
         if not calibration:
             await oracle_client.submit_lock(match_id)
+            # Publish initial heartbeat immediately after lock
+            await redis_pool.set_with_expiry(
+                f"heartbeat:match:{match_id}",
+                str(int(time.time())),
+                ex=60,
+            )
+            last_heartbeat = time.monotonic()
         match_locked = True
 
         # Initialize frame stacking buffers (prefill with first frame)
@@ -237,7 +244,7 @@ async def run_match(
                     extra={"match_id": match_id},
                 )
                 from rawl.engine.failed_upload_handler import persist_failed_upload
-                await persist_failed_upload(match_id, f"hashes/{match_id}.json")
+                await persist_failed_upload(match_id, f"hashes/{match_id}.json", hash_payload)
                 return None
 
         # Step 8: Build result + submit to oracle

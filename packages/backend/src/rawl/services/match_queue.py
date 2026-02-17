@@ -125,11 +125,13 @@ async def try_match(game_id: str) -> tuple[str, str] | None:
             if meta_a["owner_id"] == meta_b["owner_id"]:
                 continue
 
-            # Valid pair — remove both
-            pipe = redis_pool.pipeline()
-            pipe.zrem(qkey, fid_a, fid_b)
-            pipe.delete(_meta_key(fid_a), _meta_key(fid_b))
-            await pipe.execute()
+            # Valid pair — atomically verify and remove both
+            removed = await redis_pool.atomic_pair_remove(qkey, fid_a, fid_b)
+            if not removed:
+                # One member was already taken by another worker, retry
+                continue
+            # Clean up metadata keys (have TTL anyway)
+            await redis_pool.delete(_meta_key(fid_a), _meta_key(fid_b))
             logger.info(
                 "Match paired",
                 extra={"fighter_a": fid_a, "fighter_b": fid_b, "game_id": game_id},
