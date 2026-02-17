@@ -8,12 +8,19 @@ router = APIRouter(tags=["pretrained"])
 
 # Hardcoded registry — keys map to fixed S3 paths, never constructed from user input.
 PRETRAINED_MODELS: dict[str, dict] = {
-    "sf2ce-baseline-v1": {
+    "sf2ce-linyilyi-2500k": {
         "game_id": "sf2ce",
-        "name": "SF2 Baseline v1",
+        "name": "LinyiLYi 2500k",
         "character": "Ryu",
-        "description": "Platform baseline trained on SF2 Champion Edition (5M steps, PPO)",
-        "s3_key": "pretrained/sf2ce/baseline_v1.zip",
+        "description": "Community baseline trained on SF2 Champion Edition (2.5M steps, PPO)",
+        "s3_key": "pretrained/sf2ce/linyiLYi_2500k.zip",
+    },
+    "sf2ce-thuongmhh-discrete15": {
+        "game_id": "sf2ce",
+        "name": "ThuongMHH Discrete15",
+        "character": "Ryu",
+        "description": "Community baseline trained on SF2 Champion Edition (discrete action space)",
+        "s3_key": "pretrained/sf2ce/thuongmhh_discrete15.zip",
     },
 }
 

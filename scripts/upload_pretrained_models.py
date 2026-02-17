@@ -22,7 +22,8 @@ S3_REGION = os.getenv("S3_REGION", "us-east-1")
 
 # Map of local file paths to S3 destination keys
 MODELS = {
-    "models/sf2_baseline.zip": "pretrained/sf2ce/baseline_v1.zip",
+    "models/pretrained/linyiLYi_2500k.zip": "pretrained/sf2ce/linyiLYi_2500k.zip",
+    "models/pretrained/thuongmhh_discrete15.zip": "pretrained/sf2ce/thuongmhh_discrete15.zip",
 }
 
 
