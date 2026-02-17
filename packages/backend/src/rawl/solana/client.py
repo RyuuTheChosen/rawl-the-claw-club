@@ -58,6 +58,11 @@ class SolanaClient:
             },
         )
 
+    async def _ensure_initialized(self) -> None:
+        """Lazy initialization for Celery workers (no FastAPI lifespan)."""
+        if self._client is None:
+            await self.initialize()
+
     @staticmethod
     def _load_keypair(path: str) -> Keypair | None:
         """Load oracle keypair from ORACLE_KEYPAIR_JSON env var or file path."""
@@ -109,8 +114,7 @@ class SolanaClient:
         last_valid_block_height: int | None = None,
     ) -> str:
         """Send a transaction with retry and backoff. Returns signature string."""
-        if not self._client:
-            raise RuntimeError("Solana client not initialized")
+        await self._ensure_initialized()
 
         backoff = [1, 2, 4]
         last_error: Exception | None = None
@@ -157,8 +161,7 @@ class SolanaClient:
 
     async def _build_and_send(self, ix, instruction_name: str) -> str:
         """Get recent blockhash, build Transaction, sign with oracle, send."""
-        if not self._client:
-            raise RuntimeError("Solana client not initialized")
+        await self._ensure_initialized()
 
         resp = await self._client.get_latest_blockhash()
         blockhash = resp.value.blockhash
@@ -193,8 +196,7 @@ class SolanaClient:
 
     async def _get_account(self, pubkey: Pubkey, deserializer):
         """Generic account fetch + deserialize."""
-        if not self._client:
-            raise RuntimeError("Solana client not initialized")
+        await self._ensure_initialized()
         try:
             resp = await self._client.get_account_info(pubkey, commitment=Confirmed)
             if resp.value is None:
