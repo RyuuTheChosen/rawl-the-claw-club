@@ -66,6 +66,11 @@ roms/
 *.chd
 sfiii3n.zip
 sf2_frame.png
+sf2_frame_*.png
+rawl_screenshot_*.png
+
+# Trained models (large binaries)
+models/
 
 # Celery beat schedule files
 celerybeat-schedule*
