@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     solana_rpc_url: str = "http://localhost:8899"
     solana_ws_url: str = "ws://localhost:8900"
     oracle_keypair_path: str = "./oracle-keypair.json"
-    program_id: str = "RawL1111111111111111111111111111111111111111"
+    program_id: str = "AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K"
     solana_confirm_timeout: int = 30
     solana_max_retries: int = 3
 

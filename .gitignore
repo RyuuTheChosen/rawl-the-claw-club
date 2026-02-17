@@ -41,9 +41,11 @@ Thumbs.db
 # Claude Code local settings
 .claude/
 
-# Markdown docs (except README)
+# Markdown docs (keep docs/ and README, ignore stray .md in root)
 *.md
 !README.md
+!docs/
+!docs/**/*.md
 
 # Testing
 .coverage
