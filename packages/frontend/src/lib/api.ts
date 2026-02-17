@@ -1,6 +1,6 @@
 import type { Match, Fighter, PaginatedResponse, LeaderboardEntry, PretrainedModel } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -30,33 +30,33 @@ export async function getMatches(params?: {
   if (params?.game) searchParams.set("game", params.game);
   if (params?.fighter_id) searchParams.set("fighter_id", params.fighter_id);
   const qs = searchParams.toString();
-  return fetchJson(`/api/matches${qs ? `?${qs}` : ""}`);
+  return fetchJson(`/matches${qs ? `?${qs}` : ""}`);
 }
 
 export async function getMatch(id: string): Promise<Match> {
-  return fetchJson(`/api/matches/${id}`);
+  return fetchJson(`/matches/${id}`);
 }
 
 export async function getFighters(game?: string): Promise<PaginatedResponse<Fighter>> {
   const qs = game ? `?game=${game}` : "";
-  return fetchJson(`/api/fighters${qs}`);
+  return fetchJson(`/fighters${qs}`);
 }
 
 export async function getFighter(id: string): Promise<Fighter> {
-  return fetchJson(`/api/fighters/${id}`);
+  return fetchJson(`/fighters/${id}`);
 }
 
 export async function getOdds(matchId: string) {
-  return fetchJson(`/api/odds/${matchId}`);
+  return fetchJson(`/odds/${matchId}`);
 }
 
 export async function getLeaderboard(
   gameId: string,
   limit = 50
 ): Promise<LeaderboardEntry[]> {
-  return fetchJson(`/api/leaderboard/${gameId}?limit=${limit}`);
+  return fetchJson(`/leaderboard/${gameId}?limit=${limit}`);
 }
 
 export async function getPretrainedModels(): Promise<PretrainedModel[]> {
-  return fetchJson("/api/pretrained");
+  return fetchJson("/pretrained");
 }
