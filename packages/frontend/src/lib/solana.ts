@@ -8,7 +8,7 @@
  *   platform_config: ["platform_config"]
  */
 
-import { BetSide } from "@rawl/shared";
+import { BetSide } from "@/types";
 
 export const PROGRAM_ID = process.env.NEXT_PUBLIC_PROGRAM_ID ?? "";
 

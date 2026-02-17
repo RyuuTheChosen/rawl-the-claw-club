@@ -1,0 +1,3 @@
+web: uvicorn rawl.main:create_app --factory --host 0.0.0.0 --port ${PORT:-8080}
+worker: celery -A rawl.celery_app worker -l info --pool=prefork --concurrency=2
+beat: celery -A rawl.celery_app beat -l info

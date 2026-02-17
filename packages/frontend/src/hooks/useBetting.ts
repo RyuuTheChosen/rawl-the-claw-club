@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { BetSide } from "@rawl/shared";
+import { BetSide } from "@/types";
 import {
   PROGRAM_ID,
   deriveMatchPoolPda,
