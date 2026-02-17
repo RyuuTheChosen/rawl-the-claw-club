@@ -13,10 +13,22 @@ from rawl.config import settings
 def celery_async_run(coro: Coroutine):
     """Run an async coroutine from a Celery task.
 
-    Uses the worker_engine (NullPool) so each asyncio.run() gets fresh
-    DB connections that don't persist across event loops.
+    Each asyncio.run() creates a new event loop.  The async Redis client must
+    be freshly initialised on that loop and properly closed *before* the loop
+    shuts down, otherwise orphaned connections carry stale Futures that blow up
+    on the next invocation with "attached to a different loop".
     """
-    return asyncio.run(coro)
+    from rawl.redis_client import redis_pool
+
+    redis_pool.reset()  # drop old pool ref (old loop is dead, can't await close)
+
+    async def _wrapper():
+        try:
+            return await coro
+        finally:
+            await redis_pool.close()  # cleanly shut down connections on THIS loop
+
+    return asyncio.run(_wrapper())
 
 
 # Sync Redis client for cheap guard checks in Celery tasks.
