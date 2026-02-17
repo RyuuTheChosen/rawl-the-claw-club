@@ -100,27 +100,53 @@ async def run_match(
             last_heartbeat = time.monotonic()
         match_locked = True
 
-        # Initialize frame stacking buffers (prefill with first frame)
-        init_frame_a = preprocess_for_inference(obs["P1"])
-        init_frame_b = preprocess_for_inference(obs["P2"])
-        frame_buf_a: deque[np.ndarray] = deque(
-            [init_frame_a] * FRAME_STACK_N, maxlen=FRAME_STACK_N
+        # Detect model observation space to adapt preprocessing
+        obs_shape_a = model_a.observation_space.shape
+        obs_shape_b = model_b.observation_space.shape
+        logger.info(
+            "Model obs spaces",
+            extra={"model_a": obs_shape_a, "model_b": obs_shape_b},
         )
-        frame_buf_b: deque[np.ndarray] = deque(
-            [init_frame_b] * FRAME_STACK_N, maxlen=FRAME_STACK_N
-        )
+
+        # Determine if frame stacking is needed per model.
+        # CHW models (e.g. 3x100x128) don't use frame stacking.
+        # HWC single-channel models (e.g. 84x84x1) need frame stacking.
+        use_stack_a = len(obs_shape_a) == 3 and obs_shape_a[0] not in (1, 3)
+        use_stack_b = len(obs_shape_b) == 3 and obs_shape_b[0] not in (1, 3)
+        # For stacked obs (84,84,4): preprocess single frame as (84,84,1)
+        single_shape_a = (*obs_shape_a[:2], 1) if use_stack_a else obs_shape_a
+        single_shape_b = (*obs_shape_b[:2], 1) if use_stack_b else obs_shape_b
+
+        # Initialize frame stacking buffers (only if needed)
+        if use_stack_a:
+            init_frame_a = preprocess_for_inference(obs["P1"], single_shape_a)
+            frame_buf_a: deque[np.ndarray] = deque(
+                [init_frame_a] * FRAME_STACK_N, maxlen=FRAME_STACK_N
+            )
+        if use_stack_b:
+            init_frame_b = preprocess_for_inference(obs["P2"], single_shape_b)
+            frame_buf_b: deque[np.ndarray] = deque(
+                [init_frame_b] * FRAME_STACK_N, maxlen=FRAME_STACK_N
+            )
 
         # Step 4: Game loop
         while True:
             frame_count += 1
 
-            # Preprocess and stack frames for each fighter
-            frame_a = preprocess_for_inference(obs["P1"])
-            frame_b = preprocess_for_inference(obs["P2"])
-            frame_buf_a.append(frame_a)
-            frame_buf_b.append(frame_b)
-            obs_a = np.concatenate(list(frame_buf_a), axis=-1)  # (84, 84, 4)
-            obs_b = np.concatenate(list(frame_buf_b), axis=-1)
+            # Preprocess observations per model's expected shape
+            if use_stack_a:
+                frame_a = preprocess_for_inference(obs["P1"], single_shape_a)
+                frame_buf_a.append(frame_a)
+                obs_a = np.concatenate(list(frame_buf_a), axis=-1)
+            else:
+                obs_a = preprocess_for_inference(obs["P1"], obs_shape_a)
+
+            if use_stack_b:
+                frame_b = preprocess_for_inference(obs["P2"], single_shape_b)
+                frame_buf_b.append(frame_b)
+                obs_b = np.concatenate(list(frame_buf_b), axis=-1)
+            else:
+                obs_b = preprocess_for_inference(obs["P2"], obs_shape_b)
 
             # Get actions from both models
             action_a, _ = model_a.predict(obs_a, deterministic=True)
