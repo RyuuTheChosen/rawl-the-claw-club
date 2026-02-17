@@ -101,6 +101,10 @@ class RedisPool:
         """Return members from a sorted set within a score range."""
         return await self.client.zrangebyscore(key, min_score, max_score, withscores=withscores, **kwargs)
 
+    async def zcard(self, key: str) -> int:
+        """Return the number of members in a sorted set."""
+        return await self.client.zcard(key)
+
     async def zrem(self, key: str, *members):
         """Remove members from a sorted set."""
         return await self.client.zrem(key, *members)
