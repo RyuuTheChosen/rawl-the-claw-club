@@ -1,17 +1,21 @@
-const GATEWAY_BASE = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080/gateway";
+const GATEWAY_BASE =
+  process.env.NEXT_PUBLIC_GATEWAY_URL ??
+  `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api"}/gateway`;
 
 async function gatewayRequest<T>(
   path: string,
-  apiKey: string,
+  apiKey: string | null,
   options: RequestInit = {},
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
   const res = await fetch(`${GATEWAY_BASE}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": apiKey,
-      ...options.headers,
-    },
+    headers: { ...headers, ...options.headers },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -21,14 +25,13 @@ async function gatewayRequest<T>(
 }
 
 export async function register(
-  apiKey: string,
   walletAddress: string,
   signature: string,
   message: string,
 ) {
   return gatewayRequest<{ api_key: string; wallet_address: string }>(
     "/register",
-    apiKey,
+    null,
     {
       method: "POST",
       body: JSON.stringify({ wallet_address: walletAddress, signature, message }),

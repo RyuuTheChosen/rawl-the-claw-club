@@ -136,6 +136,53 @@ function AdoptForm({
   );
 }
 
+function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
+  const { publicKey, signMessage } = useWallet();
+  const { setApiKey, setWalletAddress } = useWalletStore();
+  const [registering, setRegistering] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleRegister = async () => {
+    if (!publicKey || !signMessage) return;
+    setRegistering(true);
+    setError("");
+    try {
+      const message = `Sign to register with Rawl: ${Date.now()}`;
+      const encoded = new TextEncoder().encode(message);
+      const signatureBytes = await signMessage(encoded);
+      const signature = btoa(String.fromCharCode(...signatureBytes));
+      const walletAddress = publicKey.toBase58();
+
+      const res = await gateway.register(walletAddress, signature, message);
+      setApiKey(res.api_key);
+      setWalletAddress(walletAddress);
+      onRegistered();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  return (
+    <ArcadeCard className="mb-6" hover={false} glowColor="orange">
+      <h3 className="mb-1 font-pixel text-xs">REGISTER WALLET</h3>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Sign a message to register your wallet and get an API key. Required before deploying fighters.
+      </p>
+      {error && <p className="mb-2 font-pixel text-[8px] text-neon-red">{error}</p>}
+      <ArcadeButton
+        onClick={handleRegister}
+        disabled={registering || !signMessage}
+        glow
+        className="w-full"
+      >
+        {registering ? "SIGNING..." : "REGISTER"}
+      </ArcadeButton>
+    </ArcadeCard>
+  );
+}
+
 export default function DashboardPage() {
   const { connected, publicKey } = useWallet();
   const { apiKey } = useWalletStore();
@@ -205,6 +252,8 @@ export default function DashboardPage() {
             </ArcadeButton>
           )}
         </div>
+
+        {!apiKey && <RegisterBanner onRegistered={refreshFighters} />}
 
         {showAdoptForm && fighters.length > 0 && (
           <ArcadeCard className="mb-6" hover={false}>
