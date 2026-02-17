@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     retro_game: str = "StreetFighterIISpecialChampionEdition-Genesis-v0"
     retro_integration_path: str = ""
     retro_obs_size: int = 256
+    retro_rom_s3_key: str = "roms/sf2ce-genesis/rom.md"
 
     # CORS
     cors_origins: str = "http://localhost:3000"

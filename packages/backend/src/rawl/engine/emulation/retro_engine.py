@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 # Directory containing custom stable-retro integration files
 _INTEGRATIONS_DIR = Path(__file__).parent / "integrations"
+
+# Track whether we've already provisioned the ROM this process
+_rom_provisioned = False
 
 
 class RetroEngine(EmulationEngine):
@@ -43,6 +47,9 @@ class RetroEngine(EmulationEngine):
             "Starting RetroEngine",
             extra={"game_id": self.game_id, "match_id": self.match_id},
         )
+
+        # Auto-provision ROM from S3 if not already present
+        self._ensure_rom(retro)
 
         # Register custom integration data if configured
         integration_path = self._integration_path()
@@ -159,6 +166,37 @@ class RetroEngine(EmulationEngine):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _ensure_rom(self, retro) -> None:
+        """Download ROM from S3 into stable-retro's data dir if not present."""
+        global _rom_provisioned
+        if _rom_provisioned:
+            return
+
+        game_path = Path(retro.data.path()) / "stable" / settings.retro_game
+        rom_path = game_path / "rom.md"
+
+        if rom_path.exists():
+            logger.info("ROM already present at %s", rom_path)
+            _rom_provisioned = True
+            return
+
+        logger.info("ROM not found — downloading from S3: %s", settings.retro_rom_s3_key)
+        from rawl.s3_client import download_bytes
+
+        rom_data = asyncio.get_event_loop().run_until_complete(
+            download_bytes(settings.retro_rom_s3_key)
+        )
+        if not rom_data:
+            raise FileNotFoundError(
+                f"ROM not found in S3 at key '{settings.retro_rom_s3_key}'. "
+                "Upload the ROM first: scripts/upload_rom.py"
+            )
+
+        game_path.mkdir(parents=True, exist_ok=True)
+        rom_path.write_bytes(rom_data)
+        logger.info("ROM provisioned: %s (%d bytes)", rom_path, len(rom_data))
+        _rom_provisioned = True
 
     def _integration_path(self) -> Path | None:
         """Resolve the custom integration directory for this game.
