@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Train a baseline PPO agent for SF2 Champion Edition (Genesis).
+"""Train a PPO agent for SF2 Champion Edition (Genesis).
 
-Based on stable_retro.examples.ppo with SF2-specific reward shaping.
+Tuned based on findings from linyiLYi/street-fighter-ai, HadouQen,
+and FightLadder (ICML 2024). See docs/rl-training-guide.md.
 
 Requirements (install in WSL2):
-    pip3 install 'stable-baselines3[extra]' opencv-python-headless
+    pip3 install stable-baselines3 opencv-python-headless tensorboard tqdm rich
 
 Run:
     SDL_VIDEODRIVER=dummy python3 scripts/train_sf2_baseline.py
 
 Options:
-    --timesteps 2000000     Total training steps (default: 2M)
-    --n-envs 4              Parallel environments (default: 4)
+    --timesteps 5000000     Total training steps (default: 5M)
+    --n-envs 8              Parallel environments (default: 8)
     --output models/sf2     Output path without .zip (default: models/sf2_baseline)
     --resume models/sf2.zip Resume training from checkpoint
 
@@ -28,7 +29,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit
 from stable_baselines3 import PPO
-from stable_baselines3.common.atari_wrappers import ClipRewardEnv, WarpFrame
+from stable_baselines3.common.atari_wrappers import WarpFrame
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
@@ -42,6 +43,14 @@ import stable_retro as retro
 
 GAME = "StreetFighterIISpecialChampionEdition-Genesis-v0"
 MAX_HEALTH = 176
+
+# Asymmetric reward coefficient — damage dealt weighted higher than damage
+# taken to prevent the agent from learning to run away (the "cowardice problem").
+# Value of 3.0 from linyiLYi/street-fighter-ai (beat M. Bison).
+REWARD_COEFF = 3.0
+
+# Global scaling factor for numerical stability (prevents reward magnitude issues).
+REWARD_SCALE = 0.001
 
 
 # ---------------------------------------------------------------------------
@@ -83,9 +92,20 @@ class StochasticFrameSkip(gym.Wrapper):
 
 
 class SF2RewardWrapper(gym.Wrapper):
-    """Health-delta reward for fighting games.
+    """Asymmetric health-delta reward for fighting games.
 
-    reward = (damage_dealt - damage_taken) / MAX_HEALTH + round_bonus
+    Per-step:
+        reward = REWARD_COEFF * dmg_dealt - dmg_taken
+
+    Round win:
+        reward += pow(MAX_HEALTH, (player_hp + 1) / (MAX_HEALTH + 1)) * REWARD_COEFF
+
+    Round loss:
+        reward -= pow(MAX_HEALTH, (enemy_hp + 1) / (MAX_HEALTH + 1))
+
+    All rewards scaled by REWARD_SCALE for numerical stability.
+
+    Based on linyiLYi/street-fighter-ai reward function.
     """
 
     def __init__(self, env):
@@ -103,16 +123,19 @@ class SF2RewardWrapper(gym.Wrapper):
         wins = info.get("matches_won", 0)
         enemy_wins = info.get("enemy_matches_won", 0)
 
-        # Health-based reward (normalized to ~[-1, 1])
+        # Asymmetric health-delta: attack rewarded 3x more than defense
         dmg_dealt = max(0, self._prev_enemy_hp - enemy_hp)
         dmg_taken = max(0, self._prev_hp - hp)
-        reward = (dmg_dealt - dmg_taken) / MAX_HEALTH
+        reward = REWARD_COEFF * dmg_dealt - dmg_taken
 
-        # Round outcome bonus
+        # Exponential round bonuses scaled by remaining HP
         if wins > self._prev_wins:
-            reward += 2.0
+            reward += pow(MAX_HEALTH, (hp + 1) / (MAX_HEALTH + 1)) * REWARD_COEFF
         if enemy_wins > self._prev_enemy_wins:
-            reward -= 2.0
+            reward -= pow(MAX_HEALTH, (enemy_hp + 1) / (MAX_HEALTH + 1))
+
+        # Scale everything for numerical stability
+        reward *= REWARD_SCALE
 
         self._prev_hp = hp
         self._prev_enemy_hp = enemy_hp
@@ -128,6 +151,20 @@ class SF2RewardWrapper(gym.Wrapper):
         self._prev_wins = 0
         self._prev_enemy_wins = 0
         return obs, info
+
+
+# ---------------------------------------------------------------------------
+# Linear schedule helpers
+# ---------------------------------------------------------------------------
+
+
+def linear_schedule(initial: float, final: float = 0.0):
+    """Return a function that linearly interpolates from initial to final."""
+
+    def _schedule(progress_remaining: float) -> float:
+        return final + progress_remaining * (initial - final)
+
+    return _schedule
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +186,7 @@ def make_env(state=None, max_episode_steps=4500):
         if max_episode_steps is not None:
             env = TimeLimit(env, max_episode_steps=max_episode_steps)
         env = WarpFrame(env)  # 84x84 grayscale
-        env = ClipRewardEnv(env)
+        # No ClipRewardEnv — preserves round-win bonus signal
         return env
 
     return _init
@@ -161,11 +198,11 @@ def make_env(state=None, max_episode_steps=4500):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train SF2 PPO baseline")
-    parser.add_argument("--timesteps", type=int, default=2_000_000)
-    parser.add_argument("--n-envs", type=int, default=4)
+    parser = argparse.ArgumentParser(description="Train SF2 PPO agent")
+    parser.add_argument("--timesteps", type=int, default=5_000_000)
+    parser.add_argument("--n-envs", type=int, default=8)
     parser.add_argument("--output", type=str, default="models/sf2_baseline")
-    parser.add_argument("--checkpoint-freq", type=int, default=200_000)
+    parser.add_argument("--checkpoint-freq", type=int, default=500_000)
     parser.add_argument("--state", type=str, default=None)
     parser.add_argument("--resume", type=str, default=None)
     args = parser.parse_args()
@@ -192,13 +229,13 @@ def main():
         model = PPO(
             policy="CnnPolicy",
             env=venv,
-            learning_rate=lambda f: f * 2.5e-4,
-            n_steps=128,
-            batch_size=32 * args.n_envs,
+            learning_rate=linear_schedule(2.5e-4),
+            n_steps=512,
+            batch_size=512,
             n_epochs=4,
-            gamma=0.99,
+            gamma=0.94,
             gae_lambda=0.95,
-            clip_range=0.1,
+            clip_range=linear_schedule(0.15, 0.025),
             ent_coef=0.01,
             verbose=1,
             tensorboard_log=log_dir,
@@ -211,6 +248,8 @@ def main():
     )
 
     print(f"Training {GAME} for {args.timesteps:,} timesteps ({args.n_envs} envs)")
+    print(f"Hyperparams: gamma=0.94, n_steps=512, batch=512, clip=0.15->0.025")
+    print(f"Reward: asymmetric (coeff={REWARD_COEFF}, scale={REWARD_SCALE})")
     print(f"Checkpoints -> {output_dir}/")
     print(f"Tensorboard -> tensorboard --logdir {log_dir}")
 
