@@ -23,12 +23,16 @@ export function useMatchDataStream(matchId: string | null) {
     ws.onmessage = (event) => {
       try {
         setData(JSON.parse(event.data));
-      } catch {}
+      } catch (err) {
+        console.error("[WebSocket] Failed to parse data message:", err);
+      }
     };
 
     return () => {
       ws.close();
-      wsRef.current = null;
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
     };
   }, [matchId]);
 
@@ -64,12 +68,17 @@ export function useMatchVideoStream(
         }
         URL.revokeObjectURL(url);
       };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+      };
       img.src = url;
     };
 
     return () => {
       ws.close();
-      wsRef.current = null;
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
     };
   }, [matchId, canvasRef]);
 

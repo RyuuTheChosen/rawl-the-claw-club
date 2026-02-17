@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef } from "react";
-import { useMatchDataStream, useMatchVideoStream } from "@/hooks/useMatchStream";
+import type { MatchDataMessage } from "@/types";
+import { useMatchVideoStream } from "@/hooks/useMatchStream";
 import { DataOverlay } from "./DataOverlay";
 import { ArcadeLoader } from "./ArcadeLoader";
 import { cn } from "@/lib/utils";
@@ -9,11 +10,13 @@ import { cn } from "@/lib/utils";
 interface MatchViewerProps {
   matchId: string;
   matchFormat?: number;
+  gameId?: string;
+  data: MatchDataMessage | null;
+  dataConnected: boolean;
 }
 
-export function MatchViewer({ matchId, matchFormat = 3 }: MatchViewerProps) {
+export function MatchViewer({ matchId, matchFormat = 3, gameId, data, dataConnected }: MatchViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { data, connected: dataConnected } = useMatchDataStream(matchId);
   const { connected: videoConnected } = useMatchVideoStream(matchId, canvasRef);
 
   return (
@@ -34,7 +37,7 @@ export function MatchViewer({ matchId, matchFormat = 3 }: MatchViewerProps) {
         )}
 
         {/* Data overlay on top of canvas */}
-        <DataOverlay data={data} matchFormat={matchFormat} />
+        <DataOverlay data={data} matchFormat={matchFormat} gameId={gameId} />
 
         {/* Connection status dots */}
         <div className="absolute right-2 top-2 z-50 flex gap-1">

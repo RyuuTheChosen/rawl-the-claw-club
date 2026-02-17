@@ -16,7 +16,7 @@ export default function ArenaPage() {
   const matchId = params.matchId as string;
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
-  const { data } = useMatchDataStream(matchId);
+  const { data, connected: dataConnected } = useMatchDataStream(matchId);
 
   useEffect(() => {
     getMatch(matchId)
@@ -75,7 +75,7 @@ export default function ArenaPage() {
 
         {/* Main layout */}
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <MatchViewer matchId={matchId} matchFormat={match.match_format} />
+          <MatchViewer matchId={matchId} matchFormat={match.match_format} gameId={match.game_id} data={data} dataConnected={dataConnected} />
           <div className="space-y-4">
             <BettingPanel matchId={matchId} data={data} matchStatus={match.status} />
             {/* Match Info card */}

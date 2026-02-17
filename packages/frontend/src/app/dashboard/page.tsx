@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
 import Link from "next/link";
-import { Swords, Trophy, X } from "lucide-react";
+import { Swords } from "lucide-react";
 import { Fighter, PretrainedModel } from "@/types";
 import { useWalletStore } from "@/stores/walletStore";
 import * as gateway from "@/lib/gateway";

@@ -1,15 +1,40 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { MatchDataMessage } from "@/types";
 import { HealthBar } from "./HealthBar";
 import { RoundIndicator } from "./RoundIndicator";
 
+const MAX_HEALTH_MAP: Record<string, number> = {
+  sf2ce: 176,
+  sfiii3n: 160,
+  kof98: 103,
+  tektagt: 170,
+};
+const DEFAULT_MAX_HEALTH = 176;
+
 interface DataOverlayProps {
   data: MatchDataMessage | null;
   matchFormat?: number;
+  gameId?: string;
 }
 
-export function DataOverlay({ data, matchFormat = 3 }: DataOverlayProps) {
+export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps) {
+  const maxHealth = gameId ? (MAX_HEALTH_MAP[gameId] ?? DEFAULT_MAX_HEALTH) : DEFAULT_MAX_HEALTH;
+  const winsNeeded = Math.ceil(matchFormat / 2);
+
+  const prevRoundWinner = useRef<number | null>(null);
+  const [winsA, setWinsA] = useState(0);
+  const [winsB, setWinsB] = useState(0);
+
+  useEffect(() => {
+    if (data?.round_winner && data.round_winner !== prevRoundWinner.current) {
+      if (data.round_winner === 1) setWinsA((w) => w + 1);
+      if (data.round_winner === 2) setWinsB((w) => w + 1);
+    }
+    prevRoundWinner.current = data?.round_winner ?? null;
+  }, [data?.round_winner]);
+
   if (!data) {
     return (
       <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/80">
@@ -20,10 +45,6 @@ export function DataOverlay({ data, matchFormat = 3 }: DataOverlayProps) {
     );
   }
 
-  const winsNeeded = Math.ceil(matchFormat / 2);
-  const winsA = data.team_health_a ? 0 : 0; // Round wins not in data — derive from round_winner sequence
-  const winsB = data.team_health_b ? 0 : 0;
-
   return (
     <div className="absolute inset-0 z-30 pointer-events-none flex flex-col justify-between p-2 sm:p-3">
       {/* Top: Health bars + Timer */}
@@ -32,7 +53,7 @@ export function DataOverlay({ data, matchFormat = 3 }: DataOverlayProps) {
           {/* P1 health */}
           <div className="flex-1">
             <div className="mb-0.5 font-pixel text-[8px] text-neon-cyan">P1</div>
-            <HealthBar health={data.health_a / 176} side="left" label={`${data.health_a}`} />
+            <HealthBar health={data.health_a / maxHealth} side="left" label={`${data.health_a}`} />
             {data.team_health_a && data.team_health_a.length > 1 && (
               <div className="mt-0.5 flex gap-0.5">
                 {data.team_health_a.map((h, i) => (
@@ -65,7 +86,7 @@ export function DataOverlay({ data, matchFormat = 3 }: DataOverlayProps) {
           {/* P2 health */}
           <div className="flex-1">
             <div className="mb-0.5 text-right font-pixel text-[8px] text-neon-pink">P2</div>
-            <HealthBar health={data.health_b / 176} side="right" label={`${data.health_b}`} />
+            <HealthBar health={data.health_b / maxHealth} side="right" label={`${data.health_b}`} />
             {data.team_health_b && data.team_health_b.length > 1 && (
               <div className="mt-0.5 flex gap-0.5">
                 {data.team_health_b.map((h, i) => (

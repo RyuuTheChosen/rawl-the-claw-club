@@ -18,6 +18,7 @@ export function HealthBar({ health, side, label }: HealthBarProps) {
     if (percent < prevPercent.current - 2) {
       setFlash(true);
       const t = setTimeout(() => setFlash(false), 200);
+      prevPercent.current = percent;
       return () => clearTimeout(t);
     }
     prevPercent.current = percent;
