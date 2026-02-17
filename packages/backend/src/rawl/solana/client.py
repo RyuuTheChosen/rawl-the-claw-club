@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 from solana.rpc.async_api import AsyncClient
@@ -59,7 +60,17 @@ class SolanaClient:
 
     @staticmethod
     def _load_keypair(path: str) -> Keypair | None:
-        """Load a Solana keypair from a JSON file (array of 64 bytes)."""
+        """Load oracle keypair from ORACLE_KEYPAIR_JSON env var or file path."""
+        # Prefer env var (for Railway / cloud deploys where file mounts are hard)
+        env_json = os.environ.get("ORACLE_KEYPAIR_JSON")
+        if env_json:
+            try:
+                key_data = json.loads(env_json)
+                return Keypair.from_bytes(bytes(key_data))
+            except Exception:
+                logger.exception("Failed to load keypair from ORACLE_KEYPAIR_JSON env var")
+                return None
+
         kp_path = Path(path)
         if not kp_path.exists():
             logger.warning("Keypair file not found", extra={"path": path})
