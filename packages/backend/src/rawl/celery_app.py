@@ -42,11 +42,11 @@ celery.conf.update(
 celery.conf.beat_schedule = {
     "health-check": {
         "task": "rawl.services.health_checker.check_match_heartbeats",
-        "schedule": 15.0,
+        "schedule": 30.0,
     },
     "match-scheduler": {
         "task": "rawl.services.match_scheduler.schedule_pending_matches",
-        "schedule": 10.0,
+        "schedule": 30.0,
     },
     "retry-failed-uploads": {
         "task": "rawl.engine.tasks.retry_failed_uploads_task",

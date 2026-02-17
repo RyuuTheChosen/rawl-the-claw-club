@@ -222,15 +222,22 @@ export default function DashboardPage() {
     );
   }
 
+  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
+  const [queuingId, setQueuingId] = useState<string | null>(null);
+
   const handleQueue = async (fighter: Fighter) => {
     if (!apiKey) return;
+    setQueuingId(fighter.id);
     try {
       await gateway.queueForMatch(apiKey, {
         fighter_id: fighter.id,
         game_id: fighter.game_id,
       });
+      setQueuedIds((prev) => new Set(prev).add(fighter.id));
     } catch (err) {
       console.error("Queue failed:", err);
+    } finally {
+      setQueuingId(null);
     }
   };
 
@@ -320,15 +327,22 @@ export default function DashboardPage() {
                 </div>
 
                 {fighter.status === "ready" && (
-                  <ArcadeButton
-                    onClick={() => handleQueue(fighter)}
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                  >
-                    <Swords className="mr-1.5 h-3 w-3" />
-                    Queue for Match
-                  </ArcadeButton>
+                  queuedIds.has(fighter.id) ? (
+                    <div className="w-full rounded border border-neon-green/30 bg-neon-green/10 py-1.5 text-center font-pixel text-[9px] text-neon-green">
+                      IN QUEUE — WAITING FOR OPPONENT
+                    </div>
+                  ) : (
+                    <ArcadeButton
+                      onClick={() => handleQueue(fighter)}
+                      disabled={queuingId === fighter.id}
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                    >
+                      <Swords className="mr-1.5 h-3 w-3" />
+                      {queuingId === fighter.id ? "QUEUING..." : "Queue for Match"}
+                    </ArcadeButton>
+                  )
                 )}
               </ArcadeCard>
             ))}
