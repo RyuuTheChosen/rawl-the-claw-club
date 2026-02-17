@@ -12,13 +12,13 @@
 | PlatformConfig | **Initialized** | PDA `CvKx2cxZBYwUUqjFE73s5KggNntgQth5yAWhSLDuPTUj`, 3% fee, 30min timeout |
 | Oracle wallet | **Funded** | `AEghDwMwM3XZjE5DqZyey2jJr6XvUssXVXpGsucREhm4` (0.998 SOL) |
 | Deployer wallet | **Funded** | `HUssQyZHW2jRuAG6qeuvcDu93w5TYZfDecsSwVwyjAjd` (1.33 SOL) |
-| Cloudflare R2 | **Bucket created** | `rawl-replays` bucket, API token pending |
-| Railway (backend) | **Deploying** | 3 services: backend, worker, beat |
+| Cloudflare R2 | **Bucket created** | `rawl-replays` bucket |
+| Railway (backend) | **Deployed** | 3 services: backend, worker, beat (auto-runs `alembic upgrade head` on start) |
 | Railway PostgreSQL | **Provisioned** | `postgres.railway.internal:5432/railway` |
 | Railway Redis | **Provisioned** | `redis.railway.internal:6379` |
 | Vercel (frontend) | **Live** | https://rawl-frontend.vercel.app |
 
-**Deployed:** 2026-02-17
+**Deployed:** 2026-02-17 | **Last updated:** 2026-02-18
 
 **Transactions:**
 - Program deploy: `3XDL7tFVieHbtk4DzELsNYGQJiLTGrs6XHy3cjYdW9zJKRoGtz8ViCuBgeCJRFZQMpVzieVAZpm7k3nkJ3BPNjdQ`

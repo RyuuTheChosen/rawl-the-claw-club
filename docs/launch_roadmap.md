@@ -14,7 +14,7 @@ Get everything running on your machine.
 |------|----------|-------|
 | Docker Desktop | 28.x+ | Must be running before `docker compose up` |
 | Python | 3.11+ | 3.12 tested and working |
-| Node.js | 18+ | v22 tested and working |
+| Node.js | 20+ | v22 tested and working |
 | WSL2 + Ubuntu | Required | Solana test validator does NOT work on Windows natively |
 | Rust/Cargo | For Anchor | Needed for Anchor CLI installation |
 
@@ -161,7 +161,7 @@ These issues were found and fixed during initial setup:
 - [x] Frontend loads at `http://localhost:3000`
 - [x] Solana test validator running in WSL2 (`localhost:8899`)
 - [x] Celery worker running (6 tasks registered)
-- [x] Celery beat running (3 scheduled tasks)
+- [x] Celery beat running (4 scheduled tasks)
 - [x] DIAMBRA replaced with stable-retro (genesis_plus_gx / SF2 Genesis)
 - [x] ROM imported for stable-retro (SF2 Special Champion Edition, Genesis)
 - [x] Emulation verified: 120 frames, health/round state reads correctly
@@ -592,7 +592,7 @@ Three workflows created in `.github/workflows/`:
 
 ---
 
-## Phase 5: Staging Deployment — IN PROGRESS
+## Phase 5: Staging Deployment — MOSTLY COMPLETE
 
 Real infrastructure on Railway + Vercel + Cloudflare R2.
 
@@ -610,9 +610,9 @@ Contracts deployed to devnet (2026-02-17):
 - **TODO**: Create R2 API token via dashboard (wrangler doesn't support token creation)
 - **TODO**: Set `S3_ACCESS_KEY` and `S3_SECRET_KEY` env vars on Railway
 
-### 5.3 Railway (Backend) — Deploying
+### 5.3 Railway (Backend) — Deployed
 
-Project `rawl-staging` with 3 services connected to GitHub repo:
+Project `rawl-staging` with 3 services connected to GitHub repo. Backend auto-runs `alembic upgrade head` on startup.
 
 | Service | Dockerfile | Start Command |
 |---------|-----------|--------------|
@@ -633,7 +633,7 @@ Managed services (Railway-provisioned):
 Env vars set on all 3 services via `railway variables set`.
 Oracle keypair loaded via `ORACLE_KEYPAIR_JSON` env var.
 
-**TODO**: Run `alembic upgrade head` after backend deploys successfully.
+Alembic migrations run automatically on backend startup (added 2026-02-18).
 
 ### 5.4 Vercel (Frontend) ✅ LIVE
 
@@ -672,9 +672,9 @@ Dependencies split between backend API and worker to avoid unnecessary PyTorch d
 - [x] GitHub repo connected for auto-deploys (both Railway + Vercel)
 - [x] Docker images optimized (dep split, layer caching)
 - [ ] R2 API token created (dashboard)
-- [ ] Railway builds pass and services healthy
-- [ ] Database migrated on Railway (`alembic upgrade head`)
-- [ ] NEXT_PUBLIC_API_URL updated with final Railway URL
+- [x] Railway builds pass and services deployed
+- [x] Database auto-migrated on Railway startup (`alembic upgrade head` runs on boot)
+- [x] NEXT_PUBLIC_API_URL set to Railway backend URL
 - [ ] End-to-end smoke test on staging
 - [ ] Custom domain configured (optional)
 
@@ -784,7 +784,7 @@ Future enhancements.
 | 2 | Integration testing & bugs | ✅ Complete |
 | 3 | Test suite | In Progress (backend ✅, frontend/contracts pending) |
 | 4 | CI/CD | ✅ Complete |
-| 5 | Staging deployment | In Progress (Solana ✅, Vercel ✅, Railway deploying) |
+| 5 | Staging deployment | Mostly Complete (Solana ✅, Vercel ✅, Railway ✅, R2 token pending) |
 | 6 | Monitoring | Pending |
 | 7 | Production launch | Pending |
 | 8 | Post-launch roadmap | Future |
