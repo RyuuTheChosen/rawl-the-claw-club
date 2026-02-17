@@ -212,11 +212,13 @@ class SolanaClient:
         self, match_id: str, fighter_a: Pubkey, fighter_b: Pubkey
     ) -> str:
         """Create a MatchPool on-chain. Returns tx signature."""
+        await self._ensure_initialized()
         ix = build_create_match_ix(match_id, fighter_a, fighter_b, self.oracle_pubkey)
         return await self._build_and_send(ix, "create_match")
 
     async def lock_match_on_chain(self, match_id: str) -> str:
         """Lock a match (oracle-only). Returns tx signature."""
+        await self._ensure_initialized()
         ix = build_lock_match_ix(match_id, self.oracle_pubkey)
         return await self._build_and_send(ix, "lock_match")
 
@@ -224,11 +226,13 @@ class SolanaClient:
         self, match_id: str, winner: int
     ) -> str:
         """Resolve a match with winner (0=SideA, 1=SideB). Returns tx signature."""
+        await self._ensure_initialized()
         ix = build_resolve_match_ix(match_id, self.oracle_pubkey, winner)
         return await self._build_and_send(ix, "resolve_match")
 
     async def cancel_match_on_chain(self, match_id: str) -> str:
         """Cancel a match (authority-only via oracle). Returns tx signature."""
+        await self._ensure_initialized()
         ix = build_cancel_match_ix(match_id, self.oracle_pubkey)
         return await self._build_and_send(ix, "cancel_match")
 
