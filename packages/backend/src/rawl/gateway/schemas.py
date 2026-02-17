@@ -74,3 +74,8 @@ class CreateCustomMatchRequest(BaseModel):
     fighter_b_id: uuid.UUID
     match_format: int = Field(default=3, ge=1, le=5)
     has_pool: bool = False
+
+
+class AdoptPretrainedRequest(BaseModel):
+    pretrained_id: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=64)

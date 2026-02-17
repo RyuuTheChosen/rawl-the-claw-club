@@ -100,3 +100,20 @@ export async function createCustomMatch(
     { method: "POST", body: JSON.stringify(body) },
   );
 }
+
+export async function adoptPretrained(
+  apiKey: string,
+  body: { pretrained_id: string; name: string },
+) {
+  return gatewayRequest<{
+    id: string;
+    name: string;
+    game_id: string;
+    character: string;
+    elo_rating: number;
+    status: string;
+  }>("/adopt", apiKey, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

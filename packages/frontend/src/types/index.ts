@@ -18,3 +18,11 @@ export type MatchFormat = 1 | 3 | 5;
 export const PLATFORM_FEE_BPS = 300;
 export const MATCH_TIMEOUT_SECONDS = 1800;
 export const CLAIM_WINDOW_DAYS = 30;
+
+export interface PretrainedModel {
+  id: string;
+  game_id: string;
+  name: string;
+  character: string;
+  description: string;
+}

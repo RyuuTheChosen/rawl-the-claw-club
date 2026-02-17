@@ -1,4 +1,4 @@
-import type { Match, Fighter, PaginatedResponse, LeaderboardEntry } from "@/types";
+import type { Match, Fighter, PaginatedResponse, LeaderboardEntry, PretrainedModel } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -55,4 +55,8 @@ export async function getLeaderboard(
   limit = 50
 ): Promise<LeaderboardEntry[]> {
   return fetchJson(`/api/leaderboard/${gameId}?limit=${limit}`);
+}
+
+export async function getPretrainedModels(): Promise<PretrainedModel[]> {
+  return fetchJson("/api/pretrained");
 }
