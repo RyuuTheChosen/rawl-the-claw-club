@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -168,7 +167,11 @@ class RetroEngine(EmulationEngine):
     # ------------------------------------------------------------------
 
     def _ensure_rom(self, retro) -> None:
-        """Download ROM from S3 into stable-retro's data dir if not present."""
+        """Download ROM from S3 into stable-retro's data dir if not present.
+
+        Uses sync boto3 (not async aioboto3) because this runs inside an
+        already-running asyncio event loop from celery_async_run().
+        """
         global _rom_provisioned
         if _rom_provisioned:
             return
@@ -182,16 +185,23 @@ class RetroEngine(EmulationEngine):
             return
 
         logger.info("ROM not found — downloading from S3: %s", settings.retro_rom_s3_key)
-        from rawl.s3_client import download_bytes
+        import boto3
 
-        rom_data = asyncio.get_event_loop().run_until_complete(
-            download_bytes(settings.retro_rom_s3_key)
+        client = boto3.client(
+            "s3",
+            endpoint_url=settings.s3_endpoint,
+            aws_access_key_id=settings.s3_access_key,
+            aws_secret_access_key=settings.s3_secret_key,
+            region_name=settings.s3_region,
         )
-        if not rom_data:
+        try:
+            resp = client.get_object(Bucket=settings.s3_bucket, Key=settings.retro_rom_s3_key)
+            rom_data = resp["Body"].read()
+        except Exception as e:
             raise FileNotFoundError(
-                f"ROM not found in S3 at key '{settings.retro_rom_s3_key}'. "
+                f"ROM not found in S3 at key '{settings.retro_rom_s3_key}': {e}. "
                 "Upload the ROM first: scripts/upload_rom.py"
-            )
+            ) from e
 
         game_path.mkdir(parents=True, exist_ok=True)
         rom_path.write_bytes(rom_data)
