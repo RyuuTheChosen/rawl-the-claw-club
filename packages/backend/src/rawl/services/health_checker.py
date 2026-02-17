@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from rawl.celery_app import celery
+from rawl.celery_app import celery, celery_async_run
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +19,7 @@ def check_match_heartbeats():
     If no heartbeat for 60 seconds → declared dead.
     Submits cancel_match on-chain with CANCELLED_FAILURE.
     """
-    import asyncio
-    asyncio.run(_check_heartbeats_async())
+    celery_async_run(_check_heartbeats_async())
 
 
 async def _check_heartbeats_async():

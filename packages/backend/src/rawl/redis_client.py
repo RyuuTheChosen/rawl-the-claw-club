@@ -19,7 +19,12 @@ class RedisPool:
     @property
     def client(self) -> aioredis.Redis:
         if self._pool is None:
-            raise RuntimeError("Redis pool not initialized. Call initialize() first.")
+            # Auto-initialize for Celery workers (from_url is synchronous)
+            self._pool = aioredis.from_url(
+                settings.redis_url,
+                decode_responses=False,
+                max_connections=20,
+            )
         return self._pool
 
     async def close(self) -> None:

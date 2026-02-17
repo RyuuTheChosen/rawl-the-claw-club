@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from rawl.celery_app import celery
+from rawl.celery_app import celery, celery_async_run
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,7 @@ def execute_match(
     Sync wrapper around async match runner following the pattern in health_checker.py.
     On success: updates Elo via services/elo.py, updates Match status.
     """
-    import asyncio
-    asyncio.run(
+    celery_async_run(
         _execute_match_async(match_id, game_id, fighter_a_model, fighter_b_model, match_format)
     )
 
@@ -110,9 +109,7 @@ async def _execute_match_async(
 @celery.task(name="rawl.engine.tasks.run_calibration_task", bind=True)
 def run_calibration_task(self, fighter_id: str):
     """Celery task: run calibration matches for a fighter."""
-    import asyncio
-
-    asyncio.run(_run_calibration_async(fighter_id))
+    celery_async_run(_run_calibration_async(fighter_id))
 
 
 async def _run_calibration_async(fighter_id: str):
@@ -130,9 +127,7 @@ async def _run_calibration_async(fighter_id: str):
 @celery.task(name="rawl.engine.tasks.seasonal_reset_task")
 def seasonal_reset_task():
     """Celery Beat task: quarterly seasonal reset for all ready fighters."""
-    import asyncio
-
-    asyncio.run(_seasonal_reset_async())
+    celery_async_run(_seasonal_reset_async())
 
 
 async def _seasonal_reset_async():
@@ -166,9 +161,7 @@ async def _seasonal_reset_async():
 @celery.task(name="rawl.engine.tasks.retry_failed_uploads_task")
 def retry_failed_uploads_task():
     """Celery Beat task: retry failed S3 uploads."""
-    import asyncio
-
-    asyncio.run(_retry_failed_uploads_async())
+    celery_async_run(_retry_failed_uploads_async())
 
 
 async def _retry_failed_uploads_async():

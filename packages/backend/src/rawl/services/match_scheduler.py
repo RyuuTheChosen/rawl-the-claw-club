@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from rawl.celery_app import celery
+from rawl.celery_app import celery, celery_async_run
 from rawl.config import settings
 
 logger = logging.getLogger(__name__)
@@ -12,9 +12,7 @@ logger = logging.getLogger(__name__)
 @celery.task(name="rawl.services.match_scheduler.schedule_pending_matches")
 def schedule_pending_matches():
     """Celery Beat task: attempt to pair queued fighters."""
-    import asyncio
-
-    asyncio.run(_schedule_async())
+    celery_async_run(_schedule_async())
 
 
 async def _schedule_async():

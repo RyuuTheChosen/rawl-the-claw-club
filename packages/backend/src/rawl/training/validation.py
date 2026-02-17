@@ -5,7 +5,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from rawl.celery_app import celery
+from rawl.celery_app import celery, celery_async_run
 from rawl.s3_client import download_bytes
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,7 @@ def validate_model(fighter_id: str, model_s3_key: str):
 
     Fighter status: validating → ready (pass) or rejected (fail)
     """
-    import asyncio
-    asyncio.run(_validate_async(fighter_id, model_s3_key))
+    celery_async_run(_validate_async(fighter_id, model_s3_key))
 
 
 async def _validate_async(fighter_id: str, model_s3_key: str):

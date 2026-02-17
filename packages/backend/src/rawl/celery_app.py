@@ -1,9 +1,26 @@
 from __future__ import annotations
 
+import asyncio
+from typing import Coroutine
+
 from celery import Celery
 from celery.schedules import crontab
 
 from rawl.config import settings
+
+
+def celery_async_run(coro: Coroutine):
+    """Run an async coroutine from a Celery task.
+
+    Disposes the SQLAlchemy engine's connection pool first to avoid
+    'Future attached to a different loop' errors when Celery reuses
+    forked workers across multiple asyncio.run() calls.
+    """
+    async def _wrapper():
+        from rawl.db.session import engine
+        await engine.dispose()
+        return await coro
+    return asyncio.run(_wrapper())
 
 celery = Celery(
     "rawl",
