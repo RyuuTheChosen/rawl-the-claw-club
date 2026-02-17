@@ -14,7 +14,7 @@ def create_ppo_config(
     Returns config dict for stable-baselines3 PPO.
     """
     return {
-        "policy": "MlpPolicy",
+        "policy": "CnnPolicy",
         "learning_rate": 3e-4,
         "n_steps": 2048,
         "batch_size": 64,

@@ -3,7 +3,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 from dataclasses import asdict
+
+import numpy as np
 
 from rawl.config import settings
 from rawl.engine.emulation.retro_engine import RetroEngine
@@ -25,6 +28,8 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_INTERVAL = settings.heartbeat_interval_seconds
 # Data channel publish rate (every N frames at 30fps to achieve ~10Hz)
 DATA_PUBLISH_INTERVAL = settings.streaming_fps // settings.data_channel_hz
+# Frame stacking depth (must match training VecFrameStack n_stack)
+FRAME_STACK_N = 4
 
 
 async def run_match(
@@ -85,13 +90,27 @@ async def run_match(
         await oracle_client.submit_lock(match_id)
         match_locked = True
 
+        # Initialize frame stacking buffers (prefill with first frame)
+        init_frame_a = preprocess_for_inference(obs["P1"])
+        init_frame_b = preprocess_for_inference(obs["P2"])
+        frame_buf_a: deque[np.ndarray] = deque(
+            [init_frame_a] * FRAME_STACK_N, maxlen=FRAME_STACK_N
+        )
+        frame_buf_b: deque[np.ndarray] = deque(
+            [init_frame_b] * FRAME_STACK_N, maxlen=FRAME_STACK_N
+        )
+
         # Step 4: Game loop
         while True:
             frame_count += 1
 
-            # Preprocess for each fighter
-            obs_a = preprocess_for_inference(obs["P1"])
-            obs_b = preprocess_for_inference(obs["P2"])
+            # Preprocess and stack frames for each fighter
+            frame_a = preprocess_for_inference(obs["P1"])
+            frame_b = preprocess_for_inference(obs["P2"])
+            frame_buf_a.append(frame_a)
+            frame_buf_b.append(frame_b)
+            obs_a = np.concatenate(list(frame_buf_a), axis=-1)  # (84, 84, 4)
+            obs_b = np.concatenate(list(frame_buf_b), axis=-1)
 
             # Get actions from both models
             action_a, _ = model_a.predict(obs_a, deterministic=True)

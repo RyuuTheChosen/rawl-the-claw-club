@@ -5,10 +5,13 @@ import numpy as np
 
 
 def preprocess_for_inference(frame_rgb: np.ndarray) -> np.ndarray:
-    """Convert 256x256x3 RGB frame to 128x128x1 grayscale for model inference."""
+    """Convert RGB frame to 84x84x1 grayscale for model inference.
+
+    Matches SB3 WarpFrame (DeepMind standard) used during training.
+    """
     gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
-    resized = cv2.resize(gray, (128, 128), interpolation=cv2.INTER_AREA)
-    return resized.reshape(128, 128, 1)
+    resized = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
+    return resized.reshape(84, 84, 1)
 
 
 def encode_mjpeg_frame(frame_rgb: np.ndarray, quality: int = 80) -> bytes:

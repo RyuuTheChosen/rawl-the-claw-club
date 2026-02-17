@@ -75,8 +75,8 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
             logger.info("Validation step 2: Action space", extra={"fighter_id": fighter_id})
             try:
                 for _ in range(ACTION_SPACE_TEST_FRAMES):
-                    # Generate random observation matching expected shape (128, 128, 1)
-                    obs = np.random.randint(0, 256, size=(128, 128, 1), dtype=np.uint8)
+                    # Generate random observation matching expected shape (84, 84, 4)
+                    obs = np.random.randint(0, 256, size=(84, 84, 4), dtype=np.uint8)
                     action, _ = model.predict(obs, deterministic=True)
                     # Verify output is valid (not NaN, correct shape)
                     if np.any(np.isnan(action)):
@@ -92,7 +92,7 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
             # Step 3: Inference latency
             logger.info("Validation step 3: Inference latency", extra={"fighter_id": fighter_id})
             latencies = []
-            obs = np.random.randint(0, 256, size=(128, 128, 1), dtype=np.uint8)
+            obs = np.random.randint(0, 256, size=(84, 84, 4), dtype=np.uint8)
             for _ in range(INFERENCE_TEST_STEPS):
                 start = time.perf_counter()
                 model.predict(obs, deterministic=True)
