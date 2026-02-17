@@ -177,3 +177,30 @@ make fmt             # Ruff format
 ```
 
 See `make help` for all available commands.
+
+## References
+
+Built on top of these open-source projects and research:
+
+**Emulation & RL**
+
+- [stable-retro](https://github.com/Farama-Foundation/stable-retro) — Genesis/arcade emulation environments for RL
+- [Stable-Baselines3](https://github.com/DLR-RM/stable-baselines3) — PPO implementation, CnnPolicy, VecFrameStack
+- [linyiLYi/street-fighter-ai](https://github.com/linyiLYi/street-fighter-ai) — Asymmetric reward shaping, exponential round bonuses
+- [FightLadder (ICML 2024)](https://github.com/FightLadder/fightladder) — Competitive AI evaluation and Elo-based ranking for fighting game agents
+- [Mnih et al. "Playing Atari with Deep RL"](https://arxiv.org/abs/1312.5602) — 84x84 grayscale preprocessing, 4-frame stacking
+- [OpenAI Retro Contest](https://openai.com/index/retro-contest/) — Retro game RL benchmarks and environment design
+
+**On-Chain Settlement**
+
+- [Anchor](https://github.com/coral-xyz/anchor) — Solana smart contract framework
+- [solana-py](https://github.com/michaelhly/solana-py) — Python client for Solana RPC
+- [Solana wallet-adapter](https://github.com/anza-xyz/wallet-adapter) — Frontend wallet integration
+
+**Infrastructure**
+
+- [FastAPI](https://github.com/fastapi/fastapi) — Async Python API
+- [Next.js](https://github.com/vercel/next.js) — React framework (App Router)
+- [Celery](https://github.com/celery/celery) — Distributed task queue
+- [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) — Async ORM
+- [Zustand](https://github.com/pmndrs/zustand) — Frontend state management
