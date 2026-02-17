@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { MatchDataMessage } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// WS base: strip /api suffix since WebSocket routes mount at /ws, not /api/ws
+const WS_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api")
+  .replace(/\/api\/?$/, "")
+  .replace("http", "ws");
 
 export function useMatchDataStream(matchId: string | null) {
   const [data, setData] = useState<MatchDataMessage | null>(null);
@@ -13,7 +16,7 @@ export function useMatchDataStream(matchId: string | null) {
   useEffect(() => {
     if (!matchId) return;
 
-    const wsUrl = `${API_BASE.replace("http", "ws")}/ws/match/${matchId}/data`;
+    const wsUrl = `${WS_BASE}/ws/match/${matchId}/data`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -49,7 +52,7 @@ export function useMatchVideoStream(
   useEffect(() => {
     if (!matchId || !canvasRef.current) return;
 
-    const wsUrl = `${API_BASE.replace("http", "ws")}/ws/match/${matchId}/video`;
+    const wsUrl = `${WS_BASE}/ws/match/${matchId}/video`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
