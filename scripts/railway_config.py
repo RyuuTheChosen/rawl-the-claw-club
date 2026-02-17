@@ -18,7 +18,7 @@ SERVICES = [
         "name": "backend",
         "id": "8a00f283-98d1-4fee-94b0-89ebd4f7d539",
         "buildCommand": "pip install -e .",
-        "startCommand": "alembic upgrade head && uvicorn rawl.main:create_app --factory --host 0.0.0.0 --port 8080",
+        "startCommand": "uvicorn rawl.main:create_app --factory --host 0.0.0.0 --port 8080",
         "rootDirectory": "packages/backend",
     },
     {
