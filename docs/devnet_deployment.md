@@ -4,6 +4,31 @@
 
 ---
 
+## Deployment Status
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| Solana devnet contract | **Deployed** | Program `AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K` |
+| PlatformConfig | **Initialized** | PDA `CvKx2cxZBYwUUqjFE73s5KggNntgQth5yAWhSLDuPTUj`, 3% fee, 30min timeout |
+| Oracle wallet | **Funded** | `AEghDwMwM3XZjE5DqZyey2jJr6XvUssXVXpGsucREhm4` (0.998 SOL) |
+| Deployer wallet | **Funded** | `HUssQyZHW2jRuAG6qeuvcDu93w5TYZfDecsSwVwyjAjd` (1.33 SOL) |
+| Cloudflare R2 | Pending | S3-compatible storage for replays/models |
+| Railway (backend) | Pending | FastAPI + Celery |
+| Vercel (frontend) | Pending | Next.js 14 |
+
+**Deployed:** 2026-02-17
+
+**Transactions:**
+- Program deploy: `3XDL7tFVieHbtk4DzELsNYGQJiLTGrs6XHy3cjYdW9zJKRoGtz8ViCuBgeCJRFZQMpVzieVAZpm7k3nkJ3BPNjdQ`
+- Oracle fund (1 SOL transfer): `4fnXLa9TqkypRB55BKAH4iZ94g6zTHWjf75wiQu2mBCMku3pRKWDDep4YEZMpNfNU8s7jVCD4VUQzWcUXFUTmjFU`
+- PlatformConfig init: `5nirLUmbvvmQsFnYLCFjY6QNz2232Gxpumy82PNDLsjZQT6jDTQAWmLscsoCHGcWaYGFEjBnuZ44Arbz2Jyq3sbx`
+
+**Explorer links:**
+- Program: https://explorer.solana.com/address/AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K?cluster=devnet
+- PlatformConfig: https://explorer.solana.com/address/CvKx2cxZBYwUUqjFE73s5KggNntgQth5yAWhSLDuPTUj?cluster=devnet
+
+---
+
 ## Architecture Overview
 
 ```
@@ -50,7 +75,9 @@
 
 ---
 
-## Step 1: Deploy Contracts to Solana Devnet
+## Step 1: Deploy Contracts to Solana Devnet ✅ COMPLETE
+
+> Deployed 2026-02-17. Steps below are for reference or redeployment.
 
 ### 1.1 Fund the Deployer Wallet
 
