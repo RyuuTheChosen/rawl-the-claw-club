@@ -21,12 +21,14 @@ export async function getMatches(params?: {
   limit?: number;
   status?: string;
   game?: string;
+  fighter_id?: string;
 }): Promise<PaginatedResponse<Match>> {
   const searchParams = new URLSearchParams();
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   if (params?.limit) searchParams.set("limit", String(params.limit));
   if (params?.status) searchParams.set("status", params.status);
   if (params?.game) searchParams.set("game", params.game);
+  if (params?.fighter_id) searchParams.set("fighter_id", params.fighter_id);
   const qs = searchParams.toString();
   return fetchJson(`/api/matches${qs ? `?${qs}` : ""}`);
 }

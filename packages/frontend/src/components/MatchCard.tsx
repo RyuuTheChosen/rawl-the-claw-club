@@ -46,7 +46,7 @@ export function MatchCard({ match }: MatchCardProps) {
         </div>
 
         <div className="flex items-center justify-between text-xs text-rawl-light/40">
-          <span>{match.match_format.toUpperCase()}</span>
+          <span>Bo{match.match_format}</span>
           <span>{match.match_type}</span>
           {match.has_pool && poolTotal > 0 && (
             <span className="font-mono text-rawl-primary">

@@ -30,7 +30,7 @@ export function matchIdToBytes(matchId: string): Uint8Array {
  */
 async function anchorDiscriminator(name: string): Promise<Uint8Array> {
   const data = new TextEncoder().encode(`global:${name}`);
-  const hash = await crypto.subtle.digest("SHA-256", data);
+  const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(data));
   return new Uint8Array(hash).slice(0, 8);
 }
 
