@@ -164,24 +164,89 @@ class InputTracker:
             print(f"  Input log saved: {self._log_file.name}")
 
 
+# ---------------------------------------------------------------------------
+# Discrete-to-MultiBinary mapping for thuongmhh model (Discrete(15))
+# ---------------------------------------------------------------------------
+SF2_DISCRETE_COMBOS = [
+    [],                     # 0: NOOP
+    ["DOWN"],               # 1
+    ["DOWN", "LEFT"],       # 2
+    ["DOWN", "RIGHT"],      # 3
+    ["LEFT"],               # 4
+    ["RIGHT"],              # 5
+    ["UP"],                 # 6
+    ["UP", "LEFT"],         # 7
+    ["UP", "RIGHT"],        # 8
+    ["A"],                  # 9: MK
+    ["B"],                  # 10: LK
+    ["C"],                  # 11: HK
+    ["X"],                  # 12: MP
+    ["Y"],                  # 13: LP
+    ["Z"],                  # 14: HP
+]
+
+
+def _build_discrete_lut(buttons):
+    """Build lookup table: discrete action index -> MultiBinary(12) array."""
+    lut = []
+    for combo in SF2_DISCRETE_COMBOS:
+        arr = np.zeros(len(buttons), dtype=np.int8)
+        for btn in combo:
+            arr[buttons.index(btn)] = 1
+        lut.append(arr)
+    return lut
+
+
+# ---------------------------------------------------------------------------
+# Model type detection and loading
+# ---------------------------------------------------------------------------
+
+# Model types
+MODEL_RAWL = "rawl"          # Our models: 84x84x4 grayscale, MultiBinary(12)
+MODEL_THUONGMHH = "discrete" # thuongmhh: 84x84x4 grayscale, Discrete(15)
+MODEL_LINYILYI = "linyilyi"  # linyiLYi: 100x128x3 RGB, MultiBinary(12)
+
+
+def detect_model_type(model):
+    """Auto-detect model type from its observation/action spaces."""
+    obs_shape = model.observation_space.shape
+    act_space = model.action_space
+
+    from gymnasium.spaces import Discrete, MultiBinary
+
+    if isinstance(act_space, Discrete):
+        return MODEL_THUONGMHH
+    if obs_shape and len(obs_shape) == 3:
+        # Check both HWC and CHW layouts for linyiLYi's (100, 128, 3) or (3, 100, 128)
+        dims = sorted(obs_shape)
+        if dims[0] == 3 and dims[1] == 100 and dims[2] == 128:
+            return MODEL_LINYILYI
+    return MODEL_RAWL
+
+
 def load_model(path: str):
-    """Load an SB3 model checkpoint."""
+    """Load an SB3 model checkpoint and detect its type."""
     try:
         from stable_baselines3 import PPO
-        print(f"  Loading model: {path}")
-        model = PPO.load(path)
-        print(f"  Model loaded OK")
-        return model
     except ImportError:
         print("ERROR: stable-baselines3 not installed.")
         sys.exit(1)
-    except Exception as e:
-        print(f"ERROR: Failed to load '{path}': {e}")
-        sys.exit(1)
+    print(f"  Loading model: {path}")
+    model = PPO.load(path)
+    mtype = detect_model_type(model)
+    obs_shape = model.observation_space.shape
+    act_space = model.action_space
+    print(f"  Model loaded OK — type={mtype}, obs={obs_shape}, act={act_space}")
+    return model, mtype
 
 
-class FrameStacker:
-    """Preprocesses raw frames to 84x84 grayscale and stacks N frames."""
+# ---------------------------------------------------------------------------
+# Frame stackers per model type
+# ---------------------------------------------------------------------------
+
+
+class FrameStacker84:
+    """84x84 grayscale, 4-frame stack (Rawl + thuongmhh models)."""
 
     def __init__(self, n_stack=4):
         self.n_stack = n_stack
@@ -204,10 +269,59 @@ class FrameStacker:
         return np.concatenate(list(self.buf), axis=-1)
 
 
-def get_action(model, obs_stacked, env):
-    """Get action from model or random (12 buttons per player)."""
+class FrameStackerLinyiLYi:
+    """100x128 RGB, 9-frame buffer picking every 3rd frame's single channel.
+
+    Replicates linyiLYi/street-fighter-ai StreetFighterCustomWrapper:
+        obs = stack([buf[2][:,:,0], buf[5][:,:,1], buf[8][:,:,2]], axis=-1)
+    Produces (100, 128, 3).
+    """
+
+    def __init__(self):
+        self.buf: deque[np.ndarray] = deque(maxlen=9)
+
+    def _downsample(self, frame_rgb: np.ndarray) -> np.ndarray:
+        # Downsample by 2x: (200, 256, 3) -> (100, 128, 3)
+        return frame_rgb[::2, ::2, :]
+
+    def _stack(self) -> np.ndarray:
+        return np.stack([
+            self.buf[2][:, :, 0],   # frame 3, R channel
+            self.buf[5][:, :, 1],   # frame 6, G channel
+            self.buf[8][:, :, 2],   # frame 9, B channel
+        ], axis=-1)
+
+    def reset(self, frame_rgb: np.ndarray) -> np.ndarray:
+        ds = self._downsample(frame_rgb)
+        self.buf.clear()
+        for _ in range(9):
+            self.buf.append(ds)
+        return self._stack()
+
+    def step(self, frame_rgb: np.ndarray) -> np.ndarray:
+        self.buf.append(self._downsample(frame_rgb))
+        return self._stack()
+
+
+def make_stacker(model_type: str):
+    """Create the right frame stacker for a model type."""
+    if model_type == MODEL_LINYILYI:
+        return FrameStackerLinyiLYi()
+    return FrameStacker84(n_stack=4)
+
+
+# ---------------------------------------------------------------------------
+# Action helpers
+# ---------------------------------------------------------------------------
+
+
+def get_action(model, model_type, obs_stacked, env, discrete_lut=None):
+    """Get action from model, converting to MultiBinary(12) for the env."""
     if model is not None:
         action, _ = model.predict(obs_stacked, deterministic=True)
+        if model_type == MODEL_THUONGMHH:
+            # Discrete(15) -> MultiBinary(12) via lookup table
+            return discrete_lut[int(action)]
         return action
     return env.action_space.sample()[:12]
 
@@ -416,8 +530,12 @@ def main():
 
     # Load models
     print("\n[1/3] Loading agents...")
-    model_p1 = load_model(args.p1) if args.p1 else None
-    model_p2 = load_model(args.p2) if args.p2 else None
+    model_p1 = model_p2 = None
+    type_p1 = type_p2 = MODEL_RAWL
+    if args.p1:
+        model_p1, type_p1 = load_model(args.p1)
+    if args.p2:
+        model_p2, type_p2 = load_model(args.p2)
     has_model = model_p1 or model_p2
 
     if not has_model:
@@ -467,13 +585,16 @@ def main():
     # Setup input tracker
     tracker = InputTracker(log_file=args.log)
 
-    # Frame stackers for model inference
-    stacker_p1 = FrameStacker(n_stack=4) if model_p1 else None
-    stacker_p2 = FrameStacker(n_stack=4) if model_p2 else None
+    # Frame stackers for model inference (type-aware)
+    stacker_p1 = make_stacker(type_p1) if model_p1 else None
+    stacker_p2 = make_stacker(type_p2) if model_p2 else None
     if stacker_p1:
         stacker_p1.reset(obs)
     if stacker_p2:
         stacker_p2.reset(obs)
+
+    # Discrete action lookup table (for thuongmhh models)
+    discrete_lut = _build_discrete_lut(env.unwrapped.buttons)
 
     print(f"\n[3/3] Running at {args.fps} FPS (scale: {args.scale}x)")
     print("  Controls: Q/ESC=quit  SPACE=pause  R=reset  S=screenshot  +/-=speed\n")
@@ -531,8 +652,8 @@ def main():
             if frame_num % FRAME_SKIP == 0:
                 p1_obs = stacker_p1.step(obs) if stacker_p1 else obs
                 p2_obs = stacker_p2.step(obs) if stacker_p2 else obs
-                p1_action = get_action(model_p1, p1_obs, env)
-                p2_action = get_action(model_p2, p2_obs, env)
+                p1_action = get_action(model_p1, type_p1, p1_obs, env, discrete_lut)
+                p2_action = get_action(model_p2, type_p2, p2_obs, env, discrete_lut)
                 action = np.concatenate([p1_action, p2_action])
             # else: repeat last action (stored in current_action)
             else:
