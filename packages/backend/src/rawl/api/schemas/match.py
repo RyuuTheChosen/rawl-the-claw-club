@@ -22,6 +22,7 @@ class MatchResponse(BaseModel):
     side_a_total: float
     side_b_total: float
     created_at: datetime
+    starts_at: datetime | None = None
     locked_at: datetime | None = None
     resolved_at: datetime | None = None
 

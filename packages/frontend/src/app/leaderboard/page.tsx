@@ -12,7 +12,7 @@ import { DivisionBadge } from "@/components/DivisionBadge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-const GAMES = ["sfiii3n", "kof98", "tektagt"];
+const GAMES = ["sf2ce", "sfiii3n", "kof98", "tektagt"];
 
 const rankStyle: Record<number, string> = {
   1: "text-neon-yellow text-glow-orange",

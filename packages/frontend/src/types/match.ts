@@ -13,6 +13,7 @@ export interface Match {
   side_a_total: number;
   side_b_total: number;
   created_at: string;
+  starts_at: string | null;
   locked_at: string | null;
   resolved_at: string | null;
 }

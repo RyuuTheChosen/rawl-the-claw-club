@@ -6,6 +6,7 @@ import { MatchDataMessage } from "@/types";
 import { usePlaceBet, useClaimPayout, useRefundBet } from "@/hooks/useBetting";
 import { ArcadeCard } from "./ArcadeCard";
 import { ArcadeButton } from "./ArcadeButton";
+import { Countdown } from "./Countdown";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -13,9 +14,10 @@ interface BettingPanelProps {
   matchId: string;
   data: MatchDataMessage | null;
   matchStatus?: string;
+  startsAt?: string | null;
 }
 
-export function BettingPanel({ matchId, data, matchStatus }: BettingPanelProps) {
+export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPanelProps) {
   const { connected } = useWallet();
   const [side, setSide] = useState<"a" | "b">("a");
   const [amount, setAmount] = useState("");
@@ -65,6 +67,13 @@ export function BettingPanel({ matchId, data, matchStatus }: BettingPanelProps) 
   return (
     <ArcadeCard hover={false}>
       <h3 className="mb-3 font-pixel text-[10px] text-foreground">PLACE BET</h3>
+
+      {isOpen && startsAt && (
+        <div className="mb-3 flex items-center justify-between rounded-md bg-neon-yellow/10 px-3 py-2">
+          <span className="font-pixel text-[8px] text-neon-yellow">MATCH STARTS IN</span>
+          <Countdown targetDate={startsAt} />
+        </div>
+      )}
 
       {isOpen && (
         <>

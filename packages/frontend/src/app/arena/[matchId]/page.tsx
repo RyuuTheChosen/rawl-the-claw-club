@@ -10,6 +10,7 @@ import { useMatchDataStream } from "@/hooks/useMatchStream";
 import { ArcadeLoader } from "@/components/ArcadeLoader";
 import { PageTransition } from "@/components/PageTransition";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Countdown } from "@/components/Countdown";
 
 export default function ArenaPage() {
   const params = useParams();
@@ -95,11 +96,19 @@ export default function ArenaPage() {
           </span>
         </div>
 
+        {/* Pre-match countdown */}
+        {effectiveStatus === "open" && match.starts_at && (
+          <div className="mb-4 flex items-center justify-center gap-3 rounded-lg border border-neon-yellow/20 bg-neon-yellow/5 py-3">
+            <span className="font-pixel text-xs text-neon-yellow">FIGHT BEGINS IN</span>
+            <Countdown targetDate={match.starts_at} size="lg" />
+          </div>
+        )}
+
         {/* Main layout */}
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <MatchViewer matchId={matchId} matchFormat={match.match_format} gameId={match.game_id} data={data} dataConnected={dataConnected} />
           <div className="space-y-4">
-            <BettingPanel matchId={matchId} data={data} matchStatus={effectiveStatus} />
+            <BettingPanel matchId={matchId} data={data} matchStatus={effectiveStatus} startsAt={match.starts_at} />
             {/* Match Info card */}
             <div className="arcade-border p-4">
               <h3 className="mb-2 font-pixel text-[10px] text-foreground">MATCH INFO</h3>

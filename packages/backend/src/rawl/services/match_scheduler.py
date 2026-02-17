@@ -38,6 +38,8 @@ def schedule_pending_matches():
 
 
 async def _schedule_async():
+    from datetime import UTC, datetime, timedelta
+
     from sqlalchemy import select
 
     from rawl.db.models.fighter import Fighter
@@ -70,6 +72,7 @@ async def _schedule_async():
 
                 from rawl.db.models.match import Match
 
+                delay = settings.pre_match_delay_seconds
                 match = Match(
                     game_id=game_id,
                     match_format=settings.default_match_format,
@@ -77,6 +80,7 @@ async def _schedule_async():
                     fighter_b_id=fighter_b_id,
                     match_type="ranked",
                     has_pool=True,
+                    starts_at=datetime.now(UTC) + timedelta(seconds=delay),
                 )
                 db.add(match)
                 await db.commit()
@@ -105,15 +109,18 @@ async def _schedule_async():
                         )
                         continue
 
-                # Dispatch match execution
+                # Dispatch match execution after betting delay
                 from rawl.engine.tasks import execute_match
 
-                execute_match.delay(
-                    str(match.id),
-                    game_id,
-                    fighter_a.model_path,
-                    fighter_b.model_path,
-                    settings.default_match_format,
+                execute_match.apply_async(
+                    args=[
+                        str(match.id),
+                        game_id,
+                        fighter_a.model_path,
+                        fighter_b.model_path,
+                        settings.default_match_format,
+                    ],
+                    countdown=delay,
                 )
             else:
                 # No pair found — widen Elo windows for next tick

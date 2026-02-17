@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { Match } from "@/types";
 import { StatusBadge } from "./StatusBadge";
 import { LivePulse } from "./LivePulse";
+import { Countdown } from "./Countdown";
 import { cn } from "@/lib/utils";
 
 interface MatchCardProps {
@@ -45,6 +46,14 @@ export function MatchCard({ match }: MatchCardProps) {
             {match.fighter_b_name ?? match.fighter_b_id.slice(0, 8)}
           </span>
         </div>
+
+        {/* Countdown for open matches */}
+        {match.status === "open" && match.starts_at && (
+          <div className="mb-2 flex items-center justify-center gap-2 rounded bg-neon-yellow/10 py-1.5">
+            <span className="font-pixel text-[7px] text-neon-yellow">STARTS IN</span>
+            <Countdown targetDate={match.starts_at} />
+          </div>
+        )}
 
         {/* Bottom info */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">

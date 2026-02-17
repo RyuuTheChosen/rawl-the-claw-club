@@ -44,4 +44,5 @@ class Match(Base):
     )
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
