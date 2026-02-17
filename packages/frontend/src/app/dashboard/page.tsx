@@ -190,6 +190,8 @@ export default function DashboardPage() {
   const [fighters, setFighters] = useState<Fighter[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdoptForm, setShowAdoptForm] = useState(false);
+  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
+  const [queuingId, setQueuingId] = useState<string | null>(null);
 
   const walletAddress = publicKey?.toBase58();
 
@@ -221,9 +223,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
-  const [queuingId, setQueuingId] = useState<string | null>(null);
 
   const handleQueue = async (fighter: Fighter) => {
     if (!apiKey) return;
