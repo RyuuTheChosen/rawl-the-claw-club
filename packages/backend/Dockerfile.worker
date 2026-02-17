@@ -2,8 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Build deps for stable-retro (cmake), runtime deps for opencv + emulation
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx libglib2.0-0 docker.io \
+    build-essential cmake pkg-config \
+    libgl1-mesa-glx libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
@@ -11,4 +13,7 @@ RUN pip install --no-cache-dir .
 
 COPY src/ src/
 
-CMD ["celery", "-A", "rawl.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+# ROM must be provided at runtime via volume mount or S3 fetch:
+# -v /path/to/rom.md:<site-packages>/retro/data/stable/StreetFighterIISpecialChampionEdition-Genesis-v0/rom.md
+
+CMD ["celery", "-A", "rawl.celery_app", "worker", "--loglevel=info", "--pool=prefork", "--concurrency=4"]

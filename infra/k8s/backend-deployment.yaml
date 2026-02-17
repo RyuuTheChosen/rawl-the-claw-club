@@ -18,14 +18,14 @@ spec:
         - name: backend
           image: rawl-backend:latest
           ports:
-            - containerPort: 8000
+            - containerPort: 8080
           envFrom:
             - secretRef:
                 name: rawl-secrets
           readinessProbe:
             httpGet:
               path: /api/health
-              port: 8000
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
@@ -44,6 +44,6 @@ spec:
   selector:
     app: rawl-backend
   ports:
-    - port: 8000
-      targetPort: 8000
+    - port: 8080
+      targetPort: 8080
   type: ClusterIP

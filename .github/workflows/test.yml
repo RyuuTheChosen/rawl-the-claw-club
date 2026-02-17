@@ -1,0 +1,71 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rawl_test
+          POSTGRES_USER: rawl
+          POSTGRES_PASSWORD: rawl
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql+asyncpg://rawl:rawl@localhost:5432/rawl_test
+      REDIS_URL: redis://localhost:6379/0
+      SOLANA_RPC_URL: http://localhost:8899
+      S3_ENDPOINT_URL: http://localhost:9000
+      TESTING: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake build-essential pkg-config
+      - name: Install backend
+        working-directory: packages/backend
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        working-directory: packages/backend
+        run: pytest tests/ -v --tb=short -x
+
+  frontend-build:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: packages/frontend
+        run: npm install
+      - name: Build
+        working-directory: packages/frontend
+        run: npm run build
