@@ -45,6 +45,7 @@ import sys
 import time
 from collections import deque
 
+import cv2
 import numpy as np
 import pygame
 import stable_retro
@@ -58,6 +59,7 @@ BOTTOM_BAR_HEIGHT = 22  # Thin info strip at bottom
 # Genesis button layout from stable-retro FILTERED:
 # Index: 0=B, 1=A, 2=MODE, 3=START, 4=UP, 5=DOWN, 6=LEFT, 7=RIGHT, 8=C, 9=Y, 10=X, 11=Z
 # Per player (P1 = indices 0-11, P2 = indices 12-23)
+FRAME_SKIP = 4  # Must match training StochasticFrameSkip(n=4)
 BUTTON_NAMES = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
 # Friendly display names for SF2 mapping
 DISPLAY_NAMES = ["LK", "MK", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "HK", "LP", "MP", "HP"]
@@ -178,10 +180,34 @@ def load_model(path: str):
         sys.exit(1)
 
 
-def get_action(model, obs, env):
+class FrameStacker:
+    """Preprocesses raw frames to 84x84 grayscale and stacks N frames."""
+
+    def __init__(self, n_stack=4):
+        self.n_stack = n_stack
+        self.buf: deque[np.ndarray] = deque(maxlen=n_stack)
+
+    def reset(self, frame_rgb: np.ndarray) -> np.ndarray:
+        gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
+        resized = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
+        frame = resized.reshape(84, 84, 1)
+        self.buf.clear()
+        for _ in range(self.n_stack):
+            self.buf.append(frame)
+        return np.concatenate(list(self.buf), axis=-1)
+
+    def step(self, frame_rgb: np.ndarray) -> np.ndarray:
+        gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
+        resized = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
+        frame = resized.reshape(84, 84, 1)
+        self.buf.append(frame)
+        return np.concatenate(list(self.buf), axis=-1)
+
+
+def get_action(model, obs_stacked, env):
     """Get action from model or random (12 buttons per player)."""
     if model is not None:
-        action, _ = model.predict(obs, deterministic=True)
+        action, _ = model.predict(obs_stacked, deterministic=True)
         return action
     return env.action_space.sample()[:12]
 
@@ -441,6 +467,14 @@ def main():
     # Setup input tracker
     tracker = InputTracker(log_file=args.log)
 
+    # Frame stackers for model inference
+    stacker_p1 = FrameStacker(n_stack=4) if model_p1 else None
+    stacker_p2 = FrameStacker(n_stack=4) if model_p2 else None
+    if stacker_p1:
+        stacker_p1.reset(obs)
+    if stacker_p2:
+        stacker_p2.reset(obs)
+
     print(f"\n[3/3] Running at {args.fps} FPS (scale: {args.scale}x)")
     print("  Controls: Q/ESC=quit  SPACE=pause  R=reset  S=screenshot  +/-=speed\n")
 
@@ -467,6 +501,10 @@ def main():
                     print(f"  {'PAUSED' if paused else 'RESUMED'}")
                 elif event.key == pygame.K_r:
                     obs, info = env.reset()
+                    if stacker_p1:
+                        stacker_p1.reset(obs)
+                    if stacker_p2:
+                        stacker_p2.reset(obs)
                     frame_num = 0
                     print("  RESET")
                 elif event.key == pygame.K_s:
@@ -487,11 +525,18 @@ def main():
             clock.tick(20)
             continue
 
-        # Step environment
+        # Step environment (with frame skip to match training)
         if has_model:
-            p1_action = get_action(model_p1, obs, env)
-            p2_action = get_action(model_p2, obs, env)
-            action = np.concatenate([p1_action, p2_action])
+            # Only query model every FRAME_SKIP frames (matches training StochasticFrameSkip)
+            if frame_num % FRAME_SKIP == 0:
+                p1_obs = stacker_p1.step(obs) if stacker_p1 else obs
+                p2_obs = stacker_p2.step(obs) if stacker_p2 else obs
+                p1_action = get_action(model_p1, p1_obs, env)
+                p2_action = get_action(model_p2, p2_obs, env)
+                action = np.concatenate([p1_action, p2_action])
+            # else: repeat last action (stored in current_action)
+            else:
+                action = current_action
         else:
             action = env.action_space.sample()
 
@@ -524,6 +569,10 @@ def main():
         if terminated or truncated:
             print(f"  Episode ended at frame {frame_num} — resetting")
             obs, info = env.reset()
+            if stacker_p1:
+                stacker_p1.reset(obs)
+            if stacker_p2:
+                stacker_p2.reset(obs)
 
         # FPS
         fps_counter += 1
