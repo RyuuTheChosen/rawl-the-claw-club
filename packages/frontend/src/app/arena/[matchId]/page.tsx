@@ -7,6 +7,9 @@ import { getMatch } from "@/lib/api";
 import { MatchViewer } from "@/components/MatchViewer";
 import { BettingPanel } from "@/components/BettingPanel";
 import { useMatchDataStream } from "@/hooks/useMatchStream";
+import { ArcadeLoader } from "@/components/ArcadeLoader";
+import { PageTransition } from "@/components/PageTransition";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export default function ArenaPage() {
   const params = useParams();
@@ -23,54 +26,79 @@ export default function ArenaPage() {
   }, [matchId]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-rawl-light/50">Loading match...</div>
-      </div>
-    );
+    return <ArcadeLoader fullPage text="LOADING ARENA" />;
   }
 
   if (!match) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-red-400">Match not found</div>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2">
+        <span className="font-pixel text-sm text-neon-red">MATCH NOT FOUND</span>
+        <span className="text-xs text-muted-foreground">{matchId}</span>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">
-          <span className="text-rawl-light/50">Arena</span>{" "}
-          <span className="text-xs text-rawl-light/30">{matchId.slice(0, 8)}</span>
-        </h1>
-        <span className="text-sm uppercase text-rawl-light/40">{match.game_id}</span>
-      </div>
+    <PageTransition>
+      <div className="mx-auto max-w-7xl px-4 py-4">
+        {/* Header */}
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="font-pixel text-xs text-neon-orange text-glow-orange sm:text-sm">
+              ARENA
+            </h1>
+            <StatusBadge status={match.status} />
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {matchId.slice(0, 8)}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-pixel text-[8px] uppercase text-muted-foreground">
+              {match.game_id}
+            </span>
+            <span className="font-pixel text-[8px] text-muted-foreground">
+              Bo{match.match_format}
+            </span>
+          </div>
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <MatchViewer matchId={matchId} />
-        <div className="space-y-4">
-          <BettingPanel matchId={matchId} data={data} matchStatus={match.status} />
-          <div className="rounded-lg border border-rawl-dark/30 bg-rawl-dark/50 p-4">
-            <h3 className="mb-2 text-sm font-semibold text-rawl-light/80">Match Info</h3>
-            <dl className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-rawl-light/40">Format</dt>
-                <dd>Bo{match.match_format}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-rawl-light/40">Type</dt>
-                <dd>{match.match_type}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-rawl-light/40">Status</dt>
-                <dd>{match.status}</dd>
-              </div>
-            </dl>
+        {/* Fighter names */}
+        <div className="mb-3 flex items-center justify-between px-1">
+          <span className="font-mono text-sm text-neon-cyan">
+            {match.fighter_a_id.slice(0, 8)}
+          </span>
+          <span className="font-pixel text-xs text-neon-orange">VS</span>
+          <span className="font-mono text-sm text-neon-pink">
+            {match.fighter_b_id.slice(0, 8)}
+          </span>
+        </div>
+
+        {/* Main layout */}
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <MatchViewer matchId={matchId} matchFormat={match.match_format} />
+          <div className="space-y-4">
+            <BettingPanel matchId={matchId} data={data} matchStatus={match.status} />
+            {/* Match Info card */}
+            <div className="arcade-border p-4">
+              <h3 className="mb-2 font-pixel text-[10px] text-foreground">MATCH INFO</h3>
+              <dl className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Format</dt>
+                  <dd className="font-mono">Bo{match.match_format}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd className="uppercase">{match.match_type}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Status</dt>
+                  <dd className="uppercase">{match.status}</dd>
+                </div>
+              </dl>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }

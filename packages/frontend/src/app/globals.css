@@ -1,3 +1,198 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 33% 7%;
+    --foreground: 0 0% 96%;
+    --card: 240 25% 10%;
+    --card-foreground: 0 0% 96%;
+    --popover: 240 25% 10%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 16 100% 50%;
+    --primary-foreground: 240 33% 7%;
+    --secondary: 240 25% 12%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 240 20% 15%;
+    --muted-foreground: 240 5% 55%;
+    --accent: 345 80% 55%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 0 85% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 15% 18%;
+    --input: 240 15% 18%;
+    --ring: 16 100% 50%;
+    --chart-1: 16 100% 50%;
+    --chart-2: 180 100% 50%;
+    --chart-3: 120 100% 54%;
+    --chart-4: 51 100% 50%;
+    --chart-5: 345 80% 55%;
+    --radius: 0.5rem;
+  }
+
+  /* Always dark theme — .dark class present on <html> */
+  .dark {
+    --background: 240 33% 7%;
+    --foreground: 0 0% 96%;
+    --card: 240 25% 10%;
+    --card-foreground: 0 0% 96%;
+    --popover: 240 25% 10%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 16 100% 50%;
+    --primary-foreground: 240 33% 7%;
+    --secondary: 240 25% 12%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 240 20% 15%;
+    --muted-foreground: 240 5% 55%;
+    --accent: 345 80% 55%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 0 85% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 15% 18%;
+    --input: 240 15% 18%;
+    --ring: 16 100% 50%;
+    --chart-1: 16 100% 50%;
+    --chart-2: 180 100% 50%;
+    --chart-3: 120 100% 54%;
+    --chart-4: 51 100% 50%;
+    --chart-5: 345 80% 55%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer components {
+  /* Arcade pixel border with hover glow */
+  .arcade-border {
+    @apply rounded-lg border border-border bg-card transition-all duration-200;
+    box-shadow: 0 0 0 1px rgba(255, 69, 0, 0.05), 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+  .arcade-border:hover {
+    @apply border-neon-orange/30;
+    box-shadow: 0 0 15px rgba(255, 69, 0, 0.15), 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  /* CRT scanline overlay */
+  .crt-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.03) 0px,
+      rgba(0, 0, 0, 0.03) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    mix-blend-mode: multiply;
+  }
+
+  /* CRT screen wrapper for video */
+  .crt-screen {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+  }
+  .crt-screen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.06) 0px,
+      rgba(0, 0, 0, 0.06) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index: 2;
+  }
+
+  /* Neon text glow utilities */
+  .text-glow-orange {
+    text-shadow: 0 0 10px rgba(255, 69, 0, 0.6), 0 0 30px rgba(255, 69, 0, 0.3);
+  }
+  .text-glow-cyan {
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.6), 0 0 30px rgba(0, 255, 255, 0.3);
+  }
+  .text-glow-pink {
+    text-shadow: 0 0 10px rgba(255, 45, 120, 0.6), 0 0 30px rgba(255, 45, 120, 0.3);
+  }
+  .text-glow-green {
+    text-shadow: 0 0 10px rgba(57, 255, 20, 0.6), 0 0 30px rgba(57, 255, 20, 0.3);
+  }
+
+  /* Health bar segment variants */
+  .health-bar-segment {
+    @apply h-full transition-all duration-200;
+    transform-origin: left;
+  }
+  .health-bar-segment.right {
+    transform-origin: right;
+  }
+
+  /* Wallet adapter style overrides */
+  .wallet-adapter-button {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    font-family: var(--font-inter), system-ui, sans-serif !important;
+    border-radius: var(--radius) !important;
+    font-size: 0.875rem !important;
+    height: 2.5rem !important;
+    padding: 0 1rem !important;
+  }
+  .wallet-adapter-button:hover {
+    background-color: hsl(16 100% 45%) !important;
+  }
+  .wallet-adapter-button-trigger {
+    background-color: hsl(var(--primary)) !important;
+  }
+  .wallet-adapter-modal-wrapper {
+    background-color: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+  }
+  .wallet-adapter-modal-button-close {
+    background-color: hsl(var(--muted)) !important;
+  }
+  .wallet-adapter-modal-list li {
+    background-color: hsl(var(--secondary)) !important;
+  }
+}
+
+/* Reduced motion: disable all arcade animations */
+@media (prefers-reduced-motion: reduce) {
+  .crt-overlay {
+    display: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

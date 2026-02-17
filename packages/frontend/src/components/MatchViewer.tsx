@@ -3,44 +3,57 @@
 import { useRef } from "react";
 import { useMatchDataStream, useMatchVideoStream } from "@/hooks/useMatchStream";
 import { DataOverlay } from "./DataOverlay";
+import { ArcadeLoader } from "./ArcadeLoader";
+import { cn } from "@/lib/utils";
 
 interface MatchViewerProps {
   matchId: string;
+  matchFormat?: number;
 }
 
-export function MatchViewer({ matchId }: MatchViewerProps) {
+export function MatchViewer({ matchId, matchFormat = 3 }: MatchViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { data, connected: dataConnected } = useMatchDataStream(matchId);
   const { connected: videoConnected } = useMatchVideoStream(matchId, canvasRef);
 
   return (
-    <div className="space-y-2">
-      <div className="relative overflow-hidden rounded-lg border border-rawl-dark/30 bg-black">
+    <div className="relative">
+      <div className="crt-screen relative overflow-hidden rounded-lg border border-border bg-black">
         <canvas
           ref={canvasRef}
           width={640}
           height={480}
           className="aspect-[4/3] w-full"
         />
+
+        {/* Connection overlay */}
         {!videoConnected && (
-          <div className="absolute inset-0 flex items-center justify-center bg-rawl-dark/80">
-            <div className="text-sm text-rawl-light/50">
-              {dataConnected ? "Connecting video..." : "Connecting..."}
-            </div>
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/90">
+            <ArcadeLoader text={dataConnected ? "CONNECTING VIDEO" : "CONNECTING"} />
           </div>
         )}
-        <div className="absolute right-2 top-2 flex gap-1">
+
+        {/* Data overlay on top of canvas */}
+        <DataOverlay data={data} matchFormat={matchFormat} />
+
+        {/* Connection status dots */}
+        <div className="absolute right-2 top-2 z-50 flex gap-1">
           <div
-            className={`h-2 w-2 rounded-full ${videoConnected ? "bg-green-400" : "bg-red-400"}`}
+            className={cn(
+              "h-2 w-2 rounded-full",
+              videoConnected ? "bg-neon-green shadow-neon-green" : "bg-neon-red",
+            )}
             title={videoConnected ? "Video connected" : "Video disconnected"}
           />
           <div
-            className={`h-2 w-2 rounded-full ${dataConnected ? "bg-green-400" : "bg-red-400"}`}
+            className={cn(
+              "h-2 w-2 rounded-full",
+              dataConnected ? "bg-neon-green shadow-neon-green" : "bg-neon-red",
+            )}
             title={dataConnected ? "Data connected" : "Data disconnected"}
           />
         </div>
       </div>
-      <DataOverlay data={data} />
     </div>
   );
 }

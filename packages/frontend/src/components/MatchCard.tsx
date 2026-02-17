@@ -1,18 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "motion/react";
 import { Match } from "@/types";
+import { StatusBadge } from "./StatusBadge";
+import { LivePulse } from "./LivePulse";
+import { cn } from "@/lib/utils";
 
 interface MatchCardProps {
   match: Match;
 }
-
-const statusColors: Record<string, string> = {
-  open: "bg-blue-500/20 text-blue-400",
-  locked: "bg-yellow-500/20 text-yellow-400",
-  resolved: "bg-green-500/20 text-green-400",
-  cancelled: "bg-red-500/20 text-red-400",
-};
 
 export function MatchCard({ match }: MatchCardProps) {
   const isLive = match.status === "locked";
@@ -20,41 +17,46 @@ export function MatchCard({ match }: MatchCardProps) {
 
   return (
     <Link href={`/arena/${match.id}`}>
-      <div className="group rounded-lg border border-rawl-dark/30 bg-rawl-dark/50 p-4 transition hover:border-rawl-primary/30 hover:bg-rawl-dark/70">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wider text-rawl-light/40">
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        className={cn(
+          "arcade-border p-4 transition-all",
+          isLive && "border-neon-red/30",
+        )}
+      >
+        {/* Top row: game + status */}
+        <div className="mb-3 flex items-center justify-between">
+          <span className="font-pixel text-[8px] uppercase tracking-wider text-muted-foreground">
             {match.game_id}
           </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              statusColors[match.status] ?? "bg-rawl-dark/30 text-rawl-light/50"
-            }`}
-          >
-            {isLive && "LIVE - "}
-            {match.status.toUpperCase()}
+          <div className="flex items-center gap-2">
+            {isLive && <LivePulse />}
+            <StatusBadge status={match.status} />
+          </div>
+        </div>
+
+        {/* VS layout */}
+        <div className="mb-3 flex items-center justify-between">
+          <span className="font-mono text-sm text-neon-cyan">
+            {match.fighter_a_id.slice(0, 8)}
+          </span>
+          <span className="font-pixel text-[10px] text-neon-orange">VS</span>
+          <span className="font-mono text-sm text-neon-pink">
+            {match.fighter_b_id.slice(0, 8)}
           </span>
         </div>
 
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-medium text-rawl-light/80">
-            {match.fighter_a_id.slice(0, 8)}
-          </div>
-          <div className="text-xs text-rawl-light/40">vs</div>
-          <div className="text-sm font-medium text-rawl-light/80">
-            {match.fighter_b_id.slice(0, 8)}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs text-rawl-light/40">
-          <span>Bo{match.match_format}</span>
-          <span>{match.match_type}</span>
+        {/* Bottom info */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span className="font-pixel text-[8px]">Bo{match.match_format}</span>
+          <span className="text-[10px] uppercase">{match.match_type}</span>
           {match.has_pool && poolTotal > 0 && (
-            <span className="font-mono text-rawl-primary">
+            <span className="font-mono text-neon-orange">
               {poolTotal.toFixed(2)} SOL
             </span>
           )}
         </div>
-      </div>
+      </motion.div>
     </Link>
   );
 }

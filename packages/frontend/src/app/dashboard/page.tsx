@@ -3,10 +3,26 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Link from "next/link";
+import { Swords, Trophy, X } from "lucide-react";
 import { Fighter, PretrainedModel } from "@/types";
 import { useWalletStore } from "@/stores/walletStore";
 import * as gateway from "@/lib/gateway";
 import { getFighters, getPretrainedModels } from "@/lib/api";
+import { ArcadeCard } from "@/components/ArcadeCard";
+import { ArcadeButton } from "@/components/ArcadeButton";
+import { ArcadeLoader } from "@/components/ArcadeLoader";
+import { StatusBadge } from "@/components/StatusBadge";
+import { DivisionBadge } from "@/components/DivisionBadge";
+import { PageTransition } from "@/components/PageTransition";
+import { StaggeredList } from "@/components/StaggeredList";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function AdoptForm({
   apiKey,
@@ -58,13 +74,15 @@ function AdoptForm({
   };
 
   if (loadingModels) {
-    return <div className="py-4 text-center text-sm text-rawl-light/50">Loading models...</div>;
+    return <ArcadeLoader text="LOADING MODELS" />;
   }
 
   if (models.length === 0) {
     return (
-      <div className="py-4 text-center text-sm text-rawl-light/50">
-        No pretrained models available
+      <div className="py-4 text-center">
+        <span className="font-pixel text-[10px] text-muted-foreground">
+          NO MODELS AVAILABLE
+        </span>
       </div>
     );
   }
@@ -72,41 +90,48 @@ function AdoptForm({
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1 block text-xs text-rawl-light/40">Model</label>
-        <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          className="w-full rounded border border-rawl-dark/30 bg-rawl-dark/80 px-3 py-2 text-sm text-rawl-light"
-        >
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name} ({m.character})
-            </option>
-          ))}
-        </select>
+        <label className="mb-1 block font-pixel text-[8px] text-muted-foreground">
+          MODEL
+        </label>
+        <Select value={selectedId} onValueChange={setSelectedId}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {models.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.name} ({m.character})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {selected && (
-          <p className="mt-1 text-xs text-rawl-light/30">{selected.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{selected.description}</p>
         )}
       </div>
       <div>
-        <label className="mb-1 block text-xs text-rawl-light/40">Fighter Name</label>
-        <input
+        <label className="mb-1 block font-pixel text-[8px] text-muted-foreground">
+          FIGHTER NAME
+        </label>
+        <Input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. MyFirstBot"
           maxLength={64}
-          className="w-full rounded border border-rawl-dark/30 bg-rawl-dark/80 px-3 py-2 text-sm text-rawl-light placeholder:text-rawl-light/20"
         />
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      <button
+      {error && (
+        <p className="font-pixel text-[8px] text-neon-red">{error}</p>
+      )}
+      <ArcadeButton
         onClick={handleAdopt}
         disabled={adopting || !name.trim() || !selectedId}
-        className="w-full rounded bg-rawl-primary py-2 text-sm font-medium text-rawl-dark transition hover:bg-rawl-primary/80 disabled:opacity-50"
+        glow
+        className="w-full"
       >
-        {adopting ? "Deploying..." : "Deploy Fighter"}
-      </button>
+        {adopting ? "DEPLOYING..." : "DEPLOY FIGHTER"}
+      </ArcadeButton>
     </div>
   );
 }
@@ -135,11 +160,13 @@ export default function DashboardPage() {
 
   if (!connected) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <h1 className="mb-2 text-2xl font-bold">Dashboard</h1>
-          <p className="text-rawl-light/50">Connect your wallet to view your dashboard</p>
-        </div>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <span className="font-pixel text-sm text-neon-orange text-glow-orange">
+          CONNECT WALLET TO ENTER
+        </span>
+        <span className="text-xs text-muted-foreground">
+          Link your Solana wallet to access the dashboard
+        </span>
       </div>
     );
   }
@@ -157,109 +184,104 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-rawl-light/40">
-            {publicKey?.toBase58().slice(0, 8)}...{publicKey?.toBase58().slice(-4)}
-          </p>
+    <PageTransition>
+      <div className="mx-auto max-w-5xl px-4 py-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="font-pixel text-base text-neon-orange text-glow-orange sm:text-lg">
+              DASHBOARD
+            </h1>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              {publicKey?.toBase58().slice(0, 8)}...{publicKey?.toBase58().slice(-4)}
+            </p>
+          </div>
+          {fighters.length > 0 && (
+            <ArcadeButton
+              variant={showAdoptForm ? "ghost" : "outline"}
+              size="sm"
+              onClick={() => setShowAdoptForm(!showAdoptForm)}
+            >
+              {showAdoptForm ? "Cancel" : "Deploy Baseline"}
+            </ArcadeButton>
+          )}
         </div>
-        {fighters.length > 0 && (
-          <button
-            onClick={() => setShowAdoptForm(!showAdoptForm)}
-            className="rounded border border-rawl-primary/30 px-3 py-1.5 text-xs font-medium text-rawl-primary transition hover:bg-rawl-primary/10"
-          >
-            {showAdoptForm ? "Cancel" : "Deploy Baseline"}
-          </button>
+
+        {showAdoptForm && fighters.length > 0 && (
+          <ArcadeCard className="mb-6" hover={false}>
+            <h3 className="mb-3 font-pixel text-[10px]">DEPLOY BASELINE FIGHTER</h3>
+            <AdoptForm
+              apiKey={apiKey}
+              onAdopted={() => {
+                setShowAdoptForm(false);
+                refreshFighters();
+              }}
+            />
+          </ArcadeCard>
+        )}
+
+        <h2 className="mb-4 font-pixel text-xs text-foreground">YOUR FIGHTERS</h2>
+
+        {loading ? (
+          <ArcadeLoader text="LOADING FIGHTERS" />
+        ) : fighters.length === 0 ? (
+          <ArcadeCard hover={false} glowColor="orange">
+            <h3 className="mb-1 font-pixel text-xs">DEPLOY A STARTER</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Pick a pretrained baseline model and deploy it as your fighter.
+              It will go straight into calibration to get an Elo rating.
+            </p>
+            <AdoptForm apiKey={apiKey} onAdopted={refreshFighters} />
+          </ArcadeCard>
+        ) : (
+          <StaggeredList className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {fighters.map((fighter) => (
+              <ArcadeCard key={fighter.id}>
+                <div className="mb-2 flex items-start justify-between">
+                  <Link
+                    href={`/fighters/${fighter.id}`}
+                    className="font-medium text-neon-orange hover:text-glow-orange hover:underline"
+                  >
+                    {fighter.name}
+                  </Link>
+                  <StatusBadge status={fighter.status} />
+                </div>
+                <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="font-pixel text-[8px] uppercase">{fighter.game_id}</span>
+                  <span>{fighter.character}</span>
+                </div>
+                <DivisionBadge division={fighter.division_tier} className="mb-3" />
+
+                <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div>
+                    <div className="font-mono text-neon-orange">{fighter.elo_rating.toFixed(0)}</div>
+                    <div className="font-pixel text-[7px] text-muted-foreground">ELO</div>
+                  </div>
+                  <div>
+                    <div className="font-mono text-neon-green">{fighter.wins}</div>
+                    <div className="font-pixel text-[7px] text-muted-foreground">WINS</div>
+                  </div>
+                  <div>
+                    <div className="font-mono text-neon-red">{fighter.losses}</div>
+                    <div className="font-pixel text-[7px] text-muted-foreground">LOSSES</div>
+                  </div>
+                </div>
+
+                {fighter.status === "ready" && (
+                  <ArcadeButton
+                    onClick={() => handleQueue(fighter)}
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                  >
+                    <Swords className="mr-1.5 h-3 w-3" />
+                    Queue for Match
+                  </ArcadeButton>
+                )}
+              </ArcadeCard>
+            ))}
+          </StaggeredList>
         )}
       </div>
-
-      {showAdoptForm && fighters.length > 0 && (
-        <div className="mb-6 rounded-lg border border-rawl-primary/20 bg-rawl-dark/50 p-4">
-          <h3 className="mb-3 text-sm font-semibold">Deploy a Baseline Fighter</h3>
-          <AdoptForm
-            apiKey={apiKey}
-            onAdopted={() => {
-              setShowAdoptForm(false);
-              refreshFighters();
-            }}
-          />
-        </div>
-      )}
-
-      <h2 className="mb-4 text-lg font-semibold">Your Fighters</h2>
-
-      {loading ? (
-        <div className="py-8 text-center text-rawl-light/50">Loading...</div>
-      ) : fighters.length === 0 ? (
-        <div className="rounded-lg border border-rawl-primary/20 bg-rawl-dark/50 p-6">
-          <h3 className="mb-1 text-lg font-semibold">Deploy a Starter Fighter</h3>
-          <p className="mb-4 text-sm text-rawl-light/40">
-            Pick a pretrained baseline model and deploy it as your fighter. It will go
-            straight into calibration to get an Elo rating.
-          </p>
-          <AdoptForm apiKey={apiKey} onAdopted={refreshFighters} />
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {fighters.map((fighter) => (
-            <div
-              key={fighter.id}
-              className="rounded-lg border border-rawl-dark/30 bg-rawl-dark/50 p-4"
-            >
-              <div className="mb-2 flex items-start justify-between">
-                <Link
-                  href={`/fighters/${fighter.id}`}
-                  className="font-medium text-rawl-primary hover:underline"
-                >
-                  {fighter.name}
-                </Link>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    fighter.status === "ready"
-                      ? "bg-green-500/20 text-green-400"
-                      : fighter.status === "calibrating"
-                        ? "bg-blue-500/20 text-blue-400"
-                        : fighter.status === "validating"
-                          ? "bg-yellow-500/20 text-yellow-400"
-                          : "bg-red-500/20 text-red-400"
-                  }`}
-                >
-                  {fighter.status}
-                </span>
-              </div>
-              <div className="mb-3 text-xs text-rawl-light/40">
-                {fighter.game_id.toUpperCase()} - {fighter.character}
-              </div>
-              <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
-                <div>
-                  <div className="font-mono text-rawl-primary">
-                    {fighter.elo_rating.toFixed(0)}
-                  </div>
-                  <div className="text-rawl-light/30">Elo</div>
-                </div>
-                <div>
-                  <div className="font-mono text-green-400">{fighter.wins}</div>
-                  <div className="text-rawl-light/30">Wins</div>
-                </div>
-                <div>
-                  <div className="font-mono text-red-400">{fighter.losses}</div>
-                  <div className="text-rawl-light/30">Losses</div>
-                </div>
-              </div>
-              {fighter.status === "ready" && (
-                <button
-                  onClick={() => handleQueue(fighter)}
-                  className="w-full rounded bg-rawl-primary/20 py-1.5 text-xs font-medium text-rawl-primary transition hover:bg-rawl-primary/30"
-                >
-                  Queue for Match
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    </PageTransition>
   );
 }

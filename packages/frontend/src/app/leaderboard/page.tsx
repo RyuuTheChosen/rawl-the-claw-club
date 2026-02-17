@@ -2,16 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { LeaderboardEntry } from "@/types";
 import { getLeaderboard } from "@/lib/api";
+import { ArcadeLoader } from "@/components/ArcadeLoader";
+import { PageTransition } from "@/components/PageTransition";
+import { DivisionBadge } from "@/components/DivisionBadge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 const GAMES = ["sfiii3n", "kof98", "tektagt"];
 
-const divisionColors: Record<string, string> = {
-  Diamond: "text-cyan-400",
-  Gold: "text-yellow-400",
-  Silver: "text-gray-300",
-  Bronze: "text-orange-400",
+const rankStyle: Record<number, string> = {
+  1: "text-neon-yellow text-glow-orange",
+  2: "text-gray-300",
+  3: "text-orange-400",
 };
 
 export default function LeaderboardPage() {
@@ -28,81 +33,86 @@ export default function LeaderboardPage() {
   }, [game]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Leaderboard</h1>
-        <div className="flex gap-2">
-          {GAMES.map((g) => (
-            <button
-              key={g}
-              onClick={() => setGame(g)}
-              className={`rounded-full px-3 py-1 text-xs font-medium uppercase transition ${
-                game === g
-                  ? "bg-rawl-primary text-rawl-dark"
-                  : "bg-rawl-dark/50 text-rawl-light/50 hover:text-rawl-light"
-              }`}
-            >
-              {g}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="py-12 text-center text-rawl-light/50">Loading...</div>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-rawl-dark/30">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-rawl-dark/30 bg-rawl-dark/50 text-left text-xs text-rawl-light/40">
-                <th className="px-4 py-3">#</th>
-                <th className="px-4 py-3">Fighter</th>
-                <th className="px-4 py-3">Division</th>
-                <th className="px-4 py-3 text-right">Elo</th>
-                <th className="px-4 py-3 text-right">W/L</th>
-                <th className="px-4 py-3 text-right">Matches</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr
-                  key={entry.fighter_id}
-                  className="border-b border-rawl-dark/20 transition hover:bg-rawl-dark/30"
-                >
-                  <td className="px-4 py-3 font-mono text-rawl-light/50">
-                    {entry.rank}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/fighters/${entry.fighter_id}`}
-                      className="font-medium text-rawl-primary hover:underline"
-                    >
-                      {entry.fighter_name}
-                    </Link>
-                    <div className="text-xs text-rawl-light/30">
-                      {entry.owner_wallet.slice(0, 6)}...{entry.owner_wallet.slice(-4)}
-                    </div>
-                  </td>
-                  <td className={`px-4 py-3 text-xs font-semibold ${divisionColors[entry.division] ?? ""}`}>
-                    {entry.division}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono">
-                    {entry.elo_rating.toFixed(0)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-green-400">{entry.wins}</span>
-                    <span className="text-rawl-light/30">/</span>
-                    <span className="text-red-400">{entry.losses}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-rawl-light/50">
-                    {entry.matches_played}
-                  </td>
-                </tr>
+    <PageTransition>
+      <div className="mx-auto max-w-4xl px-4 py-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="font-pixel text-base text-neon-orange text-glow-orange sm:text-lg">
+            HIGH SCORES
+          </h1>
+          <Tabs value={game} onValueChange={setGame}>
+            <TabsList>
+              {GAMES.map((g) => (
+                <TabsTrigger key={g} value={g} className="font-pixel text-[8px] uppercase">
+                  {g}
+                </TabsTrigger>
               ))}
-            </tbody>
-          </table>
+            </TabsList>
+          </Tabs>
         </div>
-      )}
-    </div>
+
+        {loading ? (
+          <ArcadeLoader text="LOADING SCORES" />
+        ) : entries.length === 0 ? (
+          <div className="flex min-h-[40vh] items-center justify-center">
+            <span className="font-pixel text-sm text-muted-foreground">NO FIGHTERS RANKED</span>
+          </div>
+        ) : (
+          <div className="arcade-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-left">
+                  <th className="px-4 py-3 font-pixel text-[8px] text-muted-foreground">#</th>
+                  <th className="px-4 py-3 font-pixel text-[8px] text-muted-foreground">FIGHTER</th>
+                  <th className="px-4 py-3 font-pixel text-[8px] text-muted-foreground">DIV</th>
+                  <th className="px-4 py-3 text-right font-pixel text-[8px] text-muted-foreground">ELO</th>
+                  <th className="hidden px-4 py-3 text-right font-pixel text-[8px] text-muted-foreground sm:table-cell">W/L</th>
+                  <th className="hidden px-4 py-3 text-right font-pixel text-[8px] text-muted-foreground sm:table-cell">MATCHES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, i) => (
+                  <motion.tr
+                    key={entry.fighter_id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.36) }}
+                    className="border-b border-border/50 transition-colors hover:bg-muted/20"
+                  >
+                    <td className={cn("px-4 py-3 font-mono", rankStyle[entry.rank] ?? "text-muted-foreground")}>
+                      {entry.rank}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/fighters/${entry.fighter_id}`}
+                        className="font-medium text-neon-orange hover:text-glow-orange hover:underline"
+                      >
+                        {entry.fighter_name}
+                      </Link>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {entry.owner_wallet.slice(0, 6)}...{entry.owner_wallet.slice(-4)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <DivisionBadge division={entry.division} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-neon-orange">
+                      {entry.elo_rating.toFixed(0)}
+                    </td>
+                    <td className="hidden px-4 py-3 text-right sm:table-cell">
+                      <span className="text-neon-green">{entry.wins}</span>
+                      <span className="text-muted-foreground">/</span>
+                      <span className="text-neon-red">{entry.losses}</span>
+                    </td>
+                    <td className="hidden px-4 py-3 text-right text-muted-foreground sm:table-cell">
+                      {entry.matches_played}
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </PageTransition>
   );
 }
