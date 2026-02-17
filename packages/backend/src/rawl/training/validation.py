@@ -5,10 +5,6 @@ import tempfile
 import time
 from pathlib import Path
 
-import docker
-import numpy as np
-from stable_baselines3 import PPO
-
 from rawl.celery_app import celery
 from rawl.s3_client import download_bytes
 
@@ -41,6 +37,10 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
     from rawl.db.models.fighter import Fighter
     from rawl.services.agent_registry import update_fighter_status
     from sqlalchemy import select
+
+    import docker
+    import numpy as np
+    from stable_baselines3 import PPO
 
     async with async_session_factory() as db:
         # Get fighter to determine game_id
