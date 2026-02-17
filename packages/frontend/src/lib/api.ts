@@ -37,9 +37,15 @@ export async function getMatch(id: string): Promise<Match> {
   return fetchJson(`/matches/${id}`);
 }
 
-export async function getFighters(game?: string): Promise<PaginatedResponse<Fighter>> {
-  const qs = game ? `?game=${game}` : "";
-  return fetchJson(`/fighters${qs}`);
+export async function getFighters(params?: {
+  game?: string;
+  owner?: string;
+}): Promise<PaginatedResponse<Fighter>> {
+  const searchParams = new URLSearchParams();
+  if (params?.game) searchParams.set("game", params.game);
+  if (params?.owner) searchParams.set("owner", params.owner);
+  const qs = searchParams.toString();
+  return fetchJson(`/fighters${qs ? `?${qs}` : ""}`);
 }
 
 export async function getFighter(id: string): Promise<Fighter> {

@@ -17,14 +17,26 @@ router = APIRouter(tags=["fighters"])
 async def list_fighters(
     db: DbSession,
     game: str | None = Query(None),
+    owner: str | None = Query(None, description="Filter by owner wallet address"),
     limit: int = Query(20, ge=1, le=100),
     cursor: str | None = Query(None),
 ):
-    """List fighters with optional game filter."""
+    """List fighters with optional game/owner filter."""
     query = select(Fighter).where(Fighter.status == "ready")
 
     if game:
         query = query.where(Fighter.game_id == game)
+
+    if owner:
+        from rawl.db.models.user import User
+
+        user_result = await db.execute(select(User).where(User.wallet_address == owner))
+        user = user_result.scalar_one_or_none()
+        if user:
+            query = query.where(Fighter.owner_id == user.id)
+        else:
+            # Unknown wallet — return empty
+            return PaginatedResponse(items=[], has_more=False)
 
     query = query.order_by(Fighter.elo_rating.desc()).limit(limit + 1)
 

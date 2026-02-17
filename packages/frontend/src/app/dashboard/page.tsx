@@ -191,20 +191,23 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showAdoptForm, setShowAdoptForm] = useState(false);
 
+  const walletAddress = publicKey?.toBase58();
+
   const refreshFighters = () => {
-    getFighters()
+    if (!walletAddress) return;
+    getFighters({ owner: walletAddress })
       .then((res) => setFighters(res.items))
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected || !walletAddress) {
       setLoading(false);
       return;
     }
     refreshFighters();
-  }, [connected]);
+  }, [connected, walletAddress]);
 
   if (!connected) {
     return (
