@@ -60,13 +60,15 @@ async def adopt_pretrained(
         raise HTTPException(status_code=401, detail="User not found")
 
     # 5. Create fighter — game_id, character, model_path all from registry (not user input)
+    # Set to "ready" with default Elo (1200) until emulation stack is live on workers,
+    # then switch back to "calibrating" + dispatch run_calibration_task.
     fighter = Fighter(
         owner_id=user.id,
         name=body.name,
         game_id=model_info["game_id"],
         character=model_info["character"],
         model_path=s3_key,
-        status="calibrating",
+        status="ready",
     )
     db.add(fighter)
     await db.commit()
@@ -76,11 +78,6 @@ async def adopt_pretrained(
     count = await redis_pool.incr(rate_key)
     if count == 1:
         await redis_pool.expire(rate_key, SUBMIT_RATE_WINDOW)
-
-    # 7. Dispatch calibration (skip validation — platform model is trusted)
-    from rawl.engine.tasks import run_calibration_task
-
-    run_calibration_task.delay(str(fighter.id))
 
     return FighterResponse(
         id=fighter.id,
