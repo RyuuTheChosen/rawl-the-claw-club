@@ -276,3 +276,102 @@ async def test_calibration_run_match_returns_none(fighter, db, mock_match_runner
 
     assert result is False
     assert fighter.status == "calibration_failed"
+
+
+# ── calibration=True passed to run_match ──────────────────────
+
+@pytest.mark.asyncio
+async def test_calibration_passes_calibration_flag(fighter, db, mock_match_runner_module):
+    """run_match() must be called with calibration=True."""
+    captured_kwargs = []
+
+    async def mock_run_match(*args, **kwargs):
+        captured_kwargs.append(kwargs)
+        return FakeMatchResult(
+            match_id=kwargs["match_id"],
+            winner="P1",
+            match_hash="hash",
+            round_history=[],
+        )
+
+    mock_match_runner_module.run_match = mock_run_match
+
+    with patch("rawl.services.elo.settings", _mock_settings(
+             calibration_reference_elo_list=[1000],
+             calibration_min_success=1,
+             calibration_max_retries=1,
+         )):
+        from rawl.services.elo import run_calibration
+        await run_calibration(str(fighter.id), db)
+
+    assert len(captured_kwargs) == 1
+    assert captured_kwargs[0]["calibration"] is True
+
+
+# ── matches_played / wins / losses updated ────────────────────
+
+@pytest.mark.asyncio
+async def test_calibration_updates_match_stats_all_wins(fighter, db, mock_match_runner_module):
+    """All 5 wins -> matches_played=5, wins=5, losses=0."""
+    async def mock_run_match(*args, **kwargs):
+        return FakeMatchResult(
+            match_id=kwargs["match_id"],
+            winner="P1",
+            match_hash="hash",
+            round_history=[],
+        )
+
+    mock_match_runner_module.run_match = mock_run_match
+
+    with patch("rawl.services.elo.settings", _mock_settings()):
+        from rawl.services.elo import run_calibration
+        await run_calibration(str(fighter.id), db)
+
+    assert fighter.matches_played == 5
+    assert fighter.wins == 5
+    assert fighter.losses == 0
+
+
+@pytest.mark.asyncio
+async def test_calibration_updates_match_stats_mixed(fighter, db, mock_match_runner_module):
+    """3 wins, 2 losses -> matches_played=5, wins=3, losses=2."""
+    call_count = 0
+
+    async def mock_run_match(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        winner = "P1" if call_count <= 3 else "P2"
+        return FakeMatchResult(
+            match_id=kwargs["match_id"],
+            winner=winner,
+            match_hash="hash",
+            round_history=[],
+        )
+
+    mock_match_runner_module.run_match = mock_run_match
+
+    with patch("rawl.services.elo.settings", _mock_settings()):
+        from rawl.services.elo import run_calibration
+        await run_calibration(str(fighter.id), db)
+
+    assert fighter.matches_played == 5
+    assert fighter.wins == 3
+    assert fighter.losses == 2
+
+
+@pytest.mark.asyncio
+async def test_calibration_stats_zero_on_all_errors(fighter, db, mock_match_runner_module):
+    """All errors -> matches_played=0, wins=0, losses=0."""
+    async def mock_run_match(*args, **kwargs):
+        raise RuntimeError("engine crash")
+
+    mock_match_runner_module.run_match = mock_run_match
+
+    with patch("rawl.services.elo.settings", _mock_settings()):
+        from rawl.services.elo import run_calibration
+        await run_calibration(str(fighter.id), db)
+
+    assert fighter.matches_played == 0
+    assert fighter.wins == 0
+    assert fighter.losses == 0
+    assert fighter.status == "calibration_failed"

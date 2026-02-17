@@ -130,10 +130,13 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
                 # Docker not available — skip sandbox in dev
                 logger.warning("Docker not available, skipping sandbox step", extra={"fighter_id": fighter_id})
 
-            # All steps passed
-            await update_fighter_status(fighter_id, "ready", db)
+            # All steps passed — move to calibration phase
+            await update_fighter_status(fighter_id, "calibrating", db)
+            from rawl.engine.tasks import run_calibration_task
+
+            run_calibration_task.delay(fighter_id)
             logger.info(
-                "Validation passed",
+                "Validation passed, dispatched calibration",
                 extra={"fighter_id": fighter_id, "p99_ms": round(p99, 2)},
             )
 

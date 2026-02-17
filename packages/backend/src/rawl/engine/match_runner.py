@@ -38,6 +38,7 @@ async def run_match(
     fighter_a_model_path: str,
     fighter_b_model_path: str,
     match_format: int = 3,
+    calibration: bool = False,
 ) -> MatchResult | None:
     """Execute a full match per SDD Appendix A game loop.
 
@@ -83,11 +84,13 @@ async def run_match(
                 "Adapter validation failed",
                 extra={"match_id": match_id, "error": str(e)},
             )
-            await oracle_client.submit_cancel(match_id, reason="validation_failed")
+            if not calibration:
+                await oracle_client.submit_cancel(match_id, reason="validation_failed")
             return None
 
         # Validation passed — lock the match
-        await oracle_client.submit_lock(match_id)
+        if not calibration:
+            await oracle_client.submit_lock(match_id)
         match_locked = True
 
         # Initialize frame stacking buffers (prefill with first frame)
@@ -132,7 +135,8 @@ async def run_match(
                         "Pre-lock validation error",
                         extra={"errors": validation_errors},
                     )
-                    await oracle_client.submit_cancel(match_id, reason="field_validation")
+                    if not calibration:
+                        await oracle_client.submit_cancel(match_id, reason="field_validation")
                     return None
                 else:
                     logger.warning(
@@ -140,27 +144,28 @@ async def run_match(
                         extra={"errors": validation_errors},
                     )
 
-            # Publish video frame to Redis stream
-            frame_jpeg = encode_mjpeg_frame(obs["P1"])
-            await redis_pool.stream_publish_bytes(
-                f"match:{match_id}:video", "frame", frame_jpeg
-            )
-
-            # Publish data at 10Hz
-            if frame_count % DATA_PUBLISH_INTERVAL == 0:
-                state_dict = asdict(state)
-                state_dict["match_id"] = match_id
-                state_dict["status"] = "live"
-                await redis_pool.stream_publish(
-                    f"match:{match_id}:data",
-                    {k: str(v) for k, v in state_dict.items()},
+            if not calibration:
+                # Publish video frame to Redis stream
+                frame_jpeg = encode_mjpeg_frame(obs["P1"])
+                await redis_pool.stream_publish_bytes(
+                    f"match:{match_id}:video", "frame", frame_jpeg
                 )
 
-            # Record replay
-            recorder.write_frame(
-                obs["P1"],
-                asdict(state) if frame_count % DATA_PUBLISH_INTERVAL == 0 else None,
-            )
+                # Publish data at 10Hz
+                if frame_count % DATA_PUBLISH_INTERVAL == 0:
+                    state_dict = asdict(state)
+                    state_dict["match_id"] = match_id
+                    state_dict["status"] = "live"
+                    await redis_pool.stream_publish(
+                        f"match:{match_id}:data",
+                        {k: str(v) for k, v in state_dict.items()},
+                    )
+
+                # Record replay
+                recorder.write_frame(
+                    obs["P1"],
+                    asdict(state) if frame_count % DATA_PUBLISH_INTERVAL == 0 else None,
+                )
 
             # Check round over
             round_result = adapter.is_round_over(info, state=state)
@@ -184,19 +189,21 @@ async def run_match(
                 break
 
             # Heartbeat every 15 seconds
-            now = time.monotonic()
-            if now - last_heartbeat >= HEARTBEAT_INTERVAL:
-                await redis_pool.set_with_expiry(
-                    f"heartbeat:match:{match_id}",
-                    str(int(time.time())),
-                    ex=60,
-                )
-                last_heartbeat = now
+            if not calibration:
+                now = time.monotonic()
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                    await redis_pool.set_with_expiry(
+                        f"heartbeat:match:{match_id}",
+                        str(int(time.time())),
+                        ex=60,
+                    )
+                    last_heartbeat = now
 
         # Step 5: Post-loop handling
         if not match_result:
             logger.error(f"Match {match_id} terminated without winner")
-            await oracle_client.submit_cancel(match_id, reason="terminated_no_winner")
+            if not calibration:
+                await oracle_client.submit_cancel(match_id, reason="terminated_no_winner")
             return None
 
         # Step 6: Tiebreaker
@@ -215,24 +222,25 @@ async def run_match(
             adapter_version=adapter.adapter_version,
         )
 
-        # Upload hash payload to S3 (same bytes that were hashed)
-        s3_ok = await upload_bytes(
-            f"hashes/{match_id}.json", hash_payload, "application/json"
-        )
-
-        # Upload replay
-        replay_ok = await recorder.upload_to_s3()
-
-        if not s3_ok:
-            logger.error(
-                "S3 upload failed after retries",
-                extra={"match_id": match_id},
+        if not calibration:
+            # Upload hash payload to S3 (same bytes that were hashed)
+            s3_ok = await upload_bytes(
+                f"hashes/{match_id}.json", hash_payload, "application/json"
             )
-            from rawl.engine.failed_upload_handler import persist_failed_upload
-            await persist_failed_upload(match_id, f"hashes/{match_id}.json")
-            return None
 
-        # Step 8: Submit to oracle
+            # Upload replay
+            replay_ok = await recorder.upload_to_s3()
+
+            if not s3_ok:
+                logger.error(
+                    "S3 upload failed after retries",
+                    extra={"match_id": match_id},
+                )
+                from rawl.engine.failed_upload_handler import persist_failed_upload
+                await persist_failed_upload(match_id, f"hashes/{match_id}.json")
+                return None
+
+        # Step 8: Build result + submit to oracle
         result = MatchResult(
             match_id=match_id,
             winner=match_result,
@@ -242,7 +250,8 @@ async def run_match(
             hash_version=2,
             hash_payload=hash_payload,
         )
-        await oracle_client.submit_resolve(match_id, match_result, match_hash)
+        if not calibration:
+            await oracle_client.submit_resolve(match_id, match_result, match_hash)
 
         matches_total.labels(game_id=game_id, status="completed").inc()
         return result
@@ -250,7 +259,7 @@ async def run_match(
     except Exception:
         logger.exception("Match execution failed", extra={"match_id": match_id})
         matches_total.labels(game_id=game_id, status="failed").inc()
-        if match_locked:
+        if match_locked and not calibration:
             try:
                 await oracle_client.submit_cancel(match_id, reason="engine_exception")
             except Exception:

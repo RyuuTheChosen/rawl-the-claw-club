@@ -140,6 +140,7 @@ async def run_calibration(fighter_id: str, db_session) -> bool:
 
     reference_elos = settings.calibration_reference_elo_list
     successes = 0
+    wins_count = 0
     current_elo = fighter.elo_rating
 
     for ref_elo in reference_elos:
@@ -161,6 +162,7 @@ async def run_calibration(fighter_id: str, db_session) -> bool:
                     fighter_a_model_path=fighter.model_path,
                     fighter_b_model_path=f"reference/{fighter.game_id}/{ref_elo}",
                     match_format=settings.default_match_format,
+                    calibration=True,
                 )
 
                 if match_result is None:
@@ -181,6 +183,8 @@ async def run_calibration(fighter_id: str, db_session) -> bool:
                 cal_match.completed_at = datetime.now(UTC)
 
                 successes += 1
+                if won:
+                    wins_count += 1
                 await db_session.flush()
                 break  # success — move to next reference elo
             except Exception as e:
@@ -198,9 +202,12 @@ async def run_calibration(fighter_id: str, db_session) -> bool:
                         },
                     )
 
-    # Apply final Elo and update status
+    # Apply final Elo, stats, and update status
     fighter.elo_rating = current_elo
     fighter.division_tier = get_division(current_elo)
+    fighter.matches_played += successes
+    fighter.wins += wins_count
+    fighter.losses += successes - wins_count
 
     if successes >= settings.calibration_min_success:
         fighter.status = "ready"
