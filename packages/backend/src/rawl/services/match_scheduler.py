@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 
-from rawl.celery_app import celery, celery_async_run
+from celery.exceptions import Ignore
+
+from rawl.celery_app import celery, celery_async_run, get_sync_redis
 from rawl.config import settings
 
 logger = logging.getLogger(__name__)
@@ -11,7 +13,27 @@ logger = logging.getLogger(__name__)
 
 @celery.task(name="rawl.services.match_scheduler.schedule_pending_matches")
 def schedule_pending_matches():
-    """Celery Beat task: attempt to pair queued fighters."""
+    """Celery Beat task: attempt to pair queued fighters.
+
+    Skips entirely (via sync Redis check) when no fighters are queued,
+    avoiding the overhead of asyncio.run() + DB connections.
+    """
+    r = get_sync_redis()
+    # Quick check: any matchqueue:* keys exist? (excludes matchqueue:meta:* keys)
+    cursor, keys = r.scan(cursor=0, match="matchqueue:*", count=100)
+    has_queue_keys = any(
+        not k.startswith("matchqueue:meta:") for k in keys
+    )
+    if not has_queue_keys:
+        # Scan may need more iterations, but first batch empty = very likely nothing queued
+        while cursor and not has_queue_keys:
+            cursor, keys = r.scan(cursor=cursor, match="matchqueue:*", count=100)
+            has_queue_keys = any(
+                not k.startswith("matchqueue:meta:") for k in keys
+            )
+    if not has_queue_keys:
+        raise Ignore()
+
     celery_async_run(_schedule_async())
 
 
@@ -19,12 +41,10 @@ async def _schedule_async():
     from sqlalchemy import select
 
     from rawl.db.models.fighter import Fighter
-    from rawl.db.models.match import Match
-    from rawl.db.models.user import User
-    from rawl.db.session import async_session_factory
+    from rawl.db.session import worker_session_factory
     from rawl.services.match_queue import get_active_game_ids, try_match, widen_windows
 
-    async with async_session_factory() as db:
+    async with worker_session_factory() as db:
         game_ids = await get_active_game_ids()
 
         for game_id in game_ids:
@@ -47,6 +67,8 @@ async def _schedule_async():
                         extra={"a": fighter_a_id, "b": fighter_b_id},
                     )
                     continue
+
+                from rawl.db.models.match import Match
 
                 match = Match(
                     game_id=game_id,
@@ -94,10 +116,11 @@ async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> None:
     from sqlalchemy import select
 
     from rawl.db.models.user import User
-    from rawl.solana.client import solana_client
 
     try:
         from solders.pubkey import Pubkey
+
+        from rawl.solana.client import solana_client
 
         # Get owner wallet addresses to use as fighter identifiers on-chain
         owner_a = await db.execute(select(User).where(User.id == fighter_a.owner_id))

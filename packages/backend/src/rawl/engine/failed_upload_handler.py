@@ -2,21 +2,21 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from rawl.s3_client import upload_bytes, download_bytes
+from rawl.s3_client import upload_bytes
 
 logger = logging.getLogger(__name__)
 
 
 async def persist_failed_upload(match_id: str, s3_key: str) -> None:
     """Create a FailedUpload row for later retry."""
-    from rawl.db.session import async_session_factory
     from rawl.db.models.failed_upload import FailedUpload
+    from rawl.db.session import worker_session_factory
 
-    async with async_session_factory() as db:
+    async with worker_session_factory() as db:
         entry = FailedUpload(
             match_id=match_id,
             s3_key=s3_key,
@@ -33,12 +33,12 @@ async def persist_failed_upload(match_id: str, s3_key: str) -> None:
 
 async def retry_failed_uploads() -> int:
     """Retry all failed S3 uploads. Returns count of resolved uploads."""
-    from rawl.db.session import async_session_factory
     from rawl.db.models.failed_upload import FailedUpload
+    from rawl.db.session import worker_session_factory
 
     resolved = 0
 
-    async with async_session_factory() as db:
+    async with worker_session_factory() as db:
         result = await db.execute(
             select(FailedUpload).where(
                 FailedUpload.status == "failed",
@@ -58,7 +58,7 @@ async def retry_failed_uploads() -> int:
                 ok = await upload_bytes(entry.s3_key, b"", "application/json")
                 if ok:
                     entry.status = "resolved"
-                    entry.resolved_at = datetime.now(timezone.utc)
+                    entry.resolved_at = datetime.now(UTC)
                     resolved += 1
                     logger.info(
                         "Retry succeeded",

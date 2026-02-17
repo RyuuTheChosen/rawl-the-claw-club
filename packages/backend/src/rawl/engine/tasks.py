@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 
 from rawl.celery_app import celery, celery_async_run
 
@@ -34,12 +35,14 @@ async def _execute_match_async(
     fighter_b_model: str,
     match_format: int,
 ):
-    from rawl.engine.match_runner import run_match
-    from rawl.db.session import async_session_factory
-    from rawl.db.models.match import Match
-    from rawl.services.elo import update_elo_after_match
+    from datetime import datetime
+
     from sqlalchemy import select
-    from datetime import datetime, timezone
+
+    from rawl.db.models.match import Match
+    from rawl.db.session import worker_session_factory
+    from rawl.engine.match_runner import run_match
+    from rawl.services.elo import update_elo_after_match
 
     result = await run_match(
         match_id=match_id,
@@ -49,7 +52,7 @@ async def _execute_match_async(
         match_format=match_format,
     )
 
-    async with async_session_factory() as db:
+    async with worker_session_factory() as db:
         stmt = select(Match).where(Match.id == match_id)
         row = await db.execute(stmt)
         match = row.scalar_one_or_none()
@@ -63,7 +66,7 @@ async def _execute_match_async(
             match.hash_version = result.hash_version
             match.adapter_version = result.adapter_version
             match.round_history = str(result.round_history)
-            match.resolved_at = datetime.now(timezone.utc)
+            match.resolved_at = datetime.now(UTC)
 
             # Determine winner_id
             if result.winner == "P1":
@@ -113,10 +116,10 @@ def run_calibration_task(self, fighter_id: str):
 
 
 async def _run_calibration_async(fighter_id: str):
-    from rawl.db.session import async_session_factory
+    from rawl.db.session import worker_session_factory
     from rawl.services.elo import run_calibration
 
-    async with async_session_factory() as db:
+    async with worker_session_factory() as db:
         success = await run_calibration(fighter_id, db)
         logger.info(
             "Calibration task finished",
@@ -134,10 +137,10 @@ async def _seasonal_reset_async():
     from sqlalchemy import select
 
     from rawl.db.models.fighter import Fighter
-    from rawl.db.session import async_session_factory
+    from rawl.db.session import worker_session_factory
     from rawl.services.elo import get_division, seasonal_reset
 
-    async with async_session_factory() as db:
+    async with worker_session_factory() as db:
         result = await db.execute(
             select(Fighter).where(Fighter.status == "ready")
         )

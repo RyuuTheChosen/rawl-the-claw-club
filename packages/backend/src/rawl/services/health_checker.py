@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 import time
 
-from rawl.celery_app import celery, celery_async_run
+from celery.exceptions import Ignore
+
+from rawl.celery_app import celery, celery_async_run, get_sync_redis
 
 logger = logging.getLogger(__name__)
 
@@ -13,24 +15,35 @@ HEARTBEAT_TIMEOUT = 60
 
 @celery.task(name="rawl.services.health_checker.check_match_heartbeats")
 def check_match_heartbeats():
-    """Celery Beat task: runs every 15 seconds.
+    """Celery Beat task: runs every 30 seconds.
 
     Checks Redis heartbeat timestamps for all active Match Runners.
-    If no heartbeat for 60 seconds → declared dead.
-    Submits cancel_match on-chain with CANCELLED_FAILURE.
+    If no heartbeat for 60 seconds -> declared dead.
+
+    Skips entirely when no heartbeat keys exist in Redis.
     """
+    r = get_sync_redis()
+    cursor, keys = r.scan(cursor=0, match="heartbeat:match:*", count=100)
+    has_heartbeats = bool(keys)
+    while cursor and not has_heartbeats:
+        cursor, keys = r.scan(cursor=cursor, match="heartbeat:match:*", count=100)
+        has_heartbeats = bool(keys)
+    if not has_heartbeats:
+        raise Ignore()
+
     celery_async_run(_check_heartbeats_async())
 
 
 async def _check_heartbeats_async():
-    from rawl.redis_client import redis_pool
-    from rawl.db.session import async_session_factory
-    from rawl.db.models.match import Match
     from sqlalchemy import select
+
+    from rawl.db.models.match import Match
+    from rawl.db.session import worker_session_factory
+    from rawl.redis_client import redis_pool
 
     try:
         # Find all active matches (locked status)
-        async with async_session_factory() as db:
+        async with worker_session_factory() as db:
             result = await db.execute(
                 select(Match).where(Match.status == "locked")
             )
@@ -68,7 +81,7 @@ async def _check_heartbeats_async():
                         pass  # Solana integration not yet connected
 
                     # Update DB status
-                    async with async_session_factory() as db:
+                    async with worker_session_factory() as db:
                         result = await db.execute(
                             select(Match).where(Match.id == match.id)
                         )

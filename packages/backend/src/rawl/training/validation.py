@@ -32,16 +32,16 @@ def validate_model(fighter_id: str, model_s3_key: str):
 
 
 async def _validate_async(fighter_id: str, model_s3_key: str):
-    from rawl.db.session import async_session_factory
-    from rawl.db.models.fighter import Fighter
-    from rawl.services.agent_registry import update_fighter_status
-    from sqlalchemy import select
-
     import docker
     import numpy as np
+    from sqlalchemy import select
     from stable_baselines3 import PPO
 
-    async with async_session_factory() as db:
+    from rawl.db.models.fighter import Fighter
+    from rawl.db.session import worker_session_factory
+    from rawl.services.agent_registry import update_fighter_status
+
+    async with worker_session_factory() as db:
         # Get fighter to determine game_id
         result = await db.execute(select(Fighter).where(Fighter.id == fighter_id))
         fighter = result.scalar_one_or_none()
@@ -139,7 +139,7 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
                 extra={"fighter_id": fighter_id, "p99_ms": round(p99, 2)},
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Validation failed", extra={"fighter_id": fighter_id})
             await update_fighter_status(fighter_id, "rejected", db)
         finally:

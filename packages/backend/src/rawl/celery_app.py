@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Coroutine
+from collections.abc import Coroutine
 
+import redis
 from celery import Celery
 from celery.schedules import crontab
 
@@ -12,15 +13,23 @@ from rawl.config import settings
 def celery_async_run(coro: Coroutine):
     """Run an async coroutine from a Celery task.
 
-    Disposes the SQLAlchemy engine's connection pool first to avoid
-    'Future attached to a different loop' errors when Celery reuses
-    forked workers across multiple asyncio.run() calls.
+    Uses the worker_engine (NullPool) so each asyncio.run() gets fresh
+    DB connections that don't persist across event loops.
     """
-    async def _wrapper():
-        from rawl.db.session import engine
-        await engine.dispose()
-        return await coro
-    return asyncio.run(_wrapper())
+    return asyncio.run(coro)
+
+
+# Sync Redis client for cheap guard checks in Celery tasks.
+# Avoids spinning up asyncio.run() when there's nothing to do.
+_sync_redis: redis.Redis | None = None
+
+
+def get_sync_redis() -> redis.Redis:
+    global _sync_redis
+    if _sync_redis is None:
+        _sync_redis = redis.from_url(settings.redis_url, decode_responses=True)
+    return _sync_redis
+
 
 celery = Celery(
     "rawl",
