@@ -88,6 +88,20 @@ export async function queueForMatch(
   });
 }
 
+export async function getQueueStatus(apiKey: string, fighterId: string) {
+  return gatewayRequest<{
+    queued: boolean;
+    elapsed_seconds: number;
+    queue_size: number;
+  }>(`/queue/${fighterId}`, apiKey);
+}
+
+export async function leaveQueue(apiKey: string, fighterId: string) {
+  return gatewayRequest<{ removed: boolean }>(`/queue/${fighterId}`, apiKey, {
+    method: "DELETE",
+  });
+}
+
 export async function createCustomMatch(
   apiKey: string,
   body: {

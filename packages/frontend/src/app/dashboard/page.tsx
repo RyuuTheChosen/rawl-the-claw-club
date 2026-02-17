@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
 import Link from "next/link";
-import { Swords } from "lucide-react";
-import { Fighter, PretrainedModel } from "@/types";
+import { Swords, X } from "lucide-react";
+import { Fighter, Match, PretrainedModel } from "@/types";
 import { useWalletStore } from "@/stores/walletStore";
 import * as gateway from "@/lib/gateway";
 import { getFighters, getMatches, getPretrainedModels } from "@/lib/api";
@@ -15,6 +15,7 @@ import { ArcadeButton } from "@/components/ArcadeButton";
 import { ArcadeLoader } from "@/components/ArcadeLoader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DivisionBadge } from "@/components/DivisionBadge";
+import { Countdown } from "@/components/Countdown";
 import { PageTransition } from "@/components/PageTransition";
 import { StaggeredList } from "@/components/StaggeredList";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+interface QueueEntry {
+  queuedAt: number;
+  error?: string;
+  elapsed: number;
+  queueSize: number;
+}
+
+interface MatchFound {
+  matchId: string;
+  startsAt: string | null;
+}
 
 function AdoptForm({
   apiKey,
@@ -185,13 +198,21 @@ function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
   );
 }
 
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function DashboardPage() {
   const { connected, publicKey } = useWallet();
   const { apiKey } = useWalletStore();
   const [showAdoptForm, setShowAdoptForm] = useState(false);
-  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
-  const [matchFoundMap, setMatchFoundMap] = useState<Record<string, string>>({});
+  const [queueMap, setQueueMap] = useState<Record<string, QueueEntry>>({});
+  const [matchFoundMap, setMatchFoundMap] = useState<Record<string, MatchFound>>({});
   const [queuingId, setQueuingId] = useState<string | null>(null);
+  const [leavingId, setLeavingId] = useState<string | null>(null);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const walletAddress = publicKey?.toBase58();
 
@@ -212,25 +233,85 @@ export default function DashboardPage() {
     key: walletAddress ?? "",
   });
 
-  // Match-found detection for queued fighters
+  // Tick elapsed counters every second for queued fighters
   useEffect(() => {
-    if (queuedIds.size === 0) return;
+    const ids = Object.keys(queueMap);
+    if (ids.length === 0) {
+      if (tickRef.current) {
+        clearInterval(tickRef.current);
+        tickRef.current = null;
+      }
+      return;
+    }
 
-    const checkMatches = async () => {
-      for (const fighterId of queuedIds) {
+    tickRef.current = setInterval(() => {
+      setQueueMap((prev) => {
+        const next = { ...prev };
+        for (const id of Object.keys(next)) {
+          next[id] = {
+            ...next[id],
+            elapsed: (Date.now() - next[id].queuedAt) / 1000,
+          };
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+    };
+  }, [Object.keys(queueMap).length]);
+
+  // Poll queue status + match detection for queued fighters (every 5s)
+  useEffect(() => {
+    const ids = Object.keys(queueMap);
+    if (ids.length === 0 || !apiKey) return;
+
+    const poll = async () => {
+      for (const fighterId of ids) {
         try {
+          // Check if match was created for this fighter
           const res = await getMatches({ fighter_id: fighterId, limit: 1 });
           if (res.items.length > 0) {
-            const match = res.items[0];
-            // Only detect matches created after queuing (recent, open or locked)
-            if (match.status === "open" || match.status === "locked") {
-              setMatchFoundMap((prev) => ({ ...prev, [fighterId]: match.id }));
-              setQueuedIds((prev) => {
-                const next = new Set(prev);
-                next.delete(fighterId);
+            const match: Match = res.items[0];
+            const matchCreated = new Date(match.created_at).getTime();
+            const queueEntry = queueMap[fighterId];
+            // Only count matches created after queuing
+            if (
+              (match.status === "open" || match.status === "locked") &&
+              queueEntry &&
+              matchCreated >= queueEntry.queuedAt - 5000
+            ) {
+              setMatchFoundMap((prev) => ({
+                ...prev,
+                [fighterId]: { matchId: match.id, startsAt: match.starts_at },
+              }));
+              setQueueMap((prev) => {
+                const next = { ...prev };
+                delete next[fighterId];
                 return next;
               });
+              continue;
             }
+          }
+
+          // Check queue status from backend
+          const status = await gateway.getQueueStatus(apiKey, fighterId);
+          if (!status.queued) {
+            // Fighter was removed from queue (TTL expired or matched)
+            setQueueMap((prev) => {
+              const next = { ...prev };
+              delete next[fighterId];
+              return next;
+            });
+          } else {
+            setQueueMap((prev) => ({
+              ...prev,
+              [fighterId]: {
+                ...prev[fighterId],
+                queueSize: status.queue_size,
+              },
+            }));
           }
         } catch {
           // Silently continue polling
@@ -238,10 +319,10 @@ export default function DashboardPage() {
       }
     };
 
-    checkMatches();
-    const timer = setInterval(checkMatches, 10_000);
+    poll();
+    const timer = setInterval(poll, 5_000);
     return () => clearInterval(timer);
-  }, [queuedIds]);
+  }, [Object.keys(queueMap).join(","), apiKey]);
 
   if (!connected) {
     return (
@@ -267,11 +348,43 @@ export default function DashboardPage() {
         fighter_id: fighter.id,
         game_id: fighter.game_id,
       });
-      setQueuedIds((prev) => new Set(prev).add(fighter.id));
+      setQueueMap((prev) => ({
+        ...prev,
+        [fighter.id]: { queuedAt: Date.now(), elapsed: 0, queueSize: 0 },
+      }));
     } catch (err) {
-      console.error("Queue failed:", err);
+      const msg = err instanceof Error ? err.message : "Queue failed";
+      setQueueMap((prev) => ({
+        ...prev,
+        [fighter.id]: { queuedAt: Date.now(), elapsed: 0, queueSize: 0, error: msg },
+      }));
+      // Auto-clear error after 5 seconds
+      setTimeout(() => {
+        setQueueMap((prev) => {
+          const next = { ...prev };
+          delete next[fighter.id];
+          return next;
+        });
+      }, 5000);
     } finally {
       setQueuingId(null);
+    }
+  };
+
+  const handleLeaveQueue = async (fighter: Fighter) => {
+    if (!apiKey) return;
+    setLeavingId(fighter.id);
+    try {
+      await gateway.leaveQueue(apiKey, fighter.id);
+    } catch {
+      // Ignore — will be removed on next poll anyway
+    } finally {
+      setQueueMap((prev) => {
+        const next = { ...prev };
+        delete next[fighter.id];
+        return next;
+      });
+      setLeavingId(null);
     }
   };
 
@@ -314,17 +427,28 @@ export default function DashboardPage() {
         )}
 
         {/* Match-found banners */}
-        {Object.entries(matchFoundMap).map(([fighterId, matchId]) => {
+        {Object.entries(matchFoundMap).map(([fighterId, found]) => {
           const fighter = fighterList.find((f) => f.id === fighterId);
           return (
-            <Link key={fighterId} href={`/arena/${matchId}`}>
-              <div className="mb-4 animate-pulse rounded-lg border border-neon-orange/40 bg-neon-orange/10 px-4 py-3 transition-all hover:bg-neon-orange/20">
-                <span className="font-pixel text-[10px] text-neon-orange">
-                  MATCH FOUND{fighter ? ` — ${fighter.name}` : ""}
-                </span>
-                <span className="ml-2 font-pixel text-[9px] text-muted-foreground">
-                  TAP TO WATCH
-                </span>
+            <Link key={fighterId} href={`/arena/${found.matchId}`}>
+              <div className="mb-4 rounded-lg border border-neon-orange/40 bg-neon-orange/10 px-4 py-3 transition-all hover:bg-neon-orange/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-orange opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-neon-orange" />
+                    </span>
+                    <span className="font-pixel text-[10px] text-neon-orange">
+                      MATCH FOUND{fighter ? ` — ${fighter.name}` : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {found.startsAt && <Countdown targetDate={found.startsAt} />}
+                    <span className="font-pixel text-[9px] text-muted-foreground">
+                      TAP TO WATCH
+                    </span>
+                  </div>
+                </div>
               </div>
             </Link>
           );
@@ -378,28 +502,68 @@ export default function DashboardPage() {
                 </div>
 
                 {matchFoundMap[fighter.id] ? (
-                  <Link href={`/arena/${matchFoundMap[fighter.id]}`}>
-                    <div className="w-full animate-pulse rounded border border-neon-orange/40 bg-neon-orange/10 py-1.5 text-center font-pixel text-[9px] text-neon-orange">
-                      MATCH FOUND — TAP TO WATCH
+                  <Link href={`/arena/${matchFoundMap[fighter.id].matchId}`}>
+                    <div className="w-full rounded border border-neon-orange/40 bg-neon-orange/10 px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-orange opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-neon-orange" />
+                          </span>
+                          <span className="font-pixel text-[9px] text-neon-orange">MATCH FOUND</span>
+                        </div>
+                        {matchFoundMap[fighter.id].startsAt && (
+                          <Countdown targetDate={matchFoundMap[fighter.id].startsAt!} />
+                        )}
+                      </div>
+                      <div className="mt-1 text-center font-pixel text-[8px] text-muted-foreground">
+                        TAP TO WATCH
+                      </div>
                     </div>
                   </Link>
-                ) : fighter.status === "ready" && (
-                  queuedIds.has(fighter.id) ? (
-                    <div className="w-full rounded border border-neon-green/30 bg-neon-green/10 py-1.5 text-center font-pixel text-[9px] text-neon-green">
-                      IN QUEUE — WAITING FOR OPPONENT
+                ) : queueMap[fighter.id]?.error ? (
+                  <div className="w-full rounded border border-neon-red/30 bg-neon-red/10 px-3 py-1.5 text-center font-pixel text-[8px] text-neon-red">
+                    {queueMap[fighter.id].error}
+                  </div>
+                ) : queueMap[fighter.id] ? (
+                  <div className="w-full space-y-1.5">
+                    <div className="flex items-center justify-between rounded border border-neon-green/30 bg-neon-green/10 px-3 py-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-neon-green opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-neon-green" />
+                        </span>
+                        <span className="font-pixel text-[9px] text-neon-green">SEARCHING</span>
+                      </div>
+                      <span className="font-mono text-[10px] tabular-nums text-neon-green">
+                        {formatElapsed(queueMap[fighter.id].elapsed)}
+                      </span>
                     </div>
-                  ) : (
-                    <ArcadeButton
-                      onClick={() => handleQueue(fighter)}
-                      disabled={queuingId === fighter.id}
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
+                    {queueMap[fighter.id].queueSize > 0 && (
+                      <div className="text-center font-pixel text-[7px] text-muted-foreground">
+                        {queueMap[fighter.id].queueSize} in queue
+                      </div>
+                    )}
+                    <button
+                      onClick={(e) => { e.preventDefault(); handleLeaveQueue(fighter); }}
+                      disabled={leavingId === fighter.id}
+                      className="flex w-full items-center justify-center gap-1 rounded border border-border py-1 font-pixel text-[8px] text-muted-foreground transition-colors hover:border-neon-red/40 hover:text-neon-red"
                     >
-                      <Swords className="mr-1.5 h-3 w-3" />
-                      {queuingId === fighter.id ? "QUEUING..." : "Queue for Match"}
-                    </ArcadeButton>
-                  )
+                      <X className="h-2.5 w-2.5" />
+                      {leavingId === fighter.id ? "LEAVING..." : "LEAVE QUEUE"}
+                    </button>
+                  </div>
+                ) : fighter.status === "ready" && (
+                  <ArcadeButton
+                    onClick={() => handleQueue(fighter)}
+                    disabled={queuingId === fighter.id}
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                  >
+                    <Swords className="mr-1.5 h-3 w-3" />
+                    {queuingId === fighter.id ? "QUEUING..." : "Queue for Match"}
+                  </ArcadeButton>
                 )}
               </ArcadeCard>
             ))}

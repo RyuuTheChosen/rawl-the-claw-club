@@ -14,6 +14,7 @@ from rawl.gateway.schemas import (
     CreateCustomMatchRequest,
     QueueMatchRequest,
     QueueMatchResponse,
+    QueueStatusResponse,
 )
 
 router = APIRouter(tags=["gateway-match"])
@@ -62,6 +63,70 @@ async def queue_for_match(
     )
 
     return QueueMatchResponse(queued=True, message="Fighter queued for matchmaking")
+
+
+@router.get("/queue/{fighter_id}", response_model=QueueStatusResponse)
+async def get_queue_status(
+    db: DbSession,
+    wallet: ApiKeyAuth,
+    fighter_id: uuid.UUID,
+):
+    """Check if a fighter is still in the matchmaking queue."""
+    result = await db.execute(select(User).where(User.wallet_address == wallet))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    result = await db.execute(
+        select(Fighter).where(Fighter.id == fighter_id, Fighter.owner_id == user.id)
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Fighter not found or not owned by you")
+
+    import json
+    import time
+
+    from rawl.redis_client import redis_pool
+
+    meta_raw = await redis_pool.get(f"matchqueue:meta:{fighter_id}")
+    if not meta_raw:
+        return QueueStatusResponse(queued=False)
+
+    meta = json.loads(meta_raw)
+    enqueued_at = meta.get("enqueued_at", time.time())
+    elapsed = time.time() - enqueued_at
+
+    game_id = meta.get("game_id", "")
+    queue_size = await redis_pool.zcard(f"matchqueue:{game_id}") if game_id else 0
+
+    return QueueStatusResponse(
+        queued=True, elapsed_seconds=round(elapsed, 1), queue_size=queue_size
+    )
+
+
+@router.delete("/queue/{fighter_id}")
+async def leave_queue(
+    db: DbSession,
+    wallet: ApiKeyAuth,
+    fighter_id: uuid.UUID,
+):
+    """Remove a fighter from the matchmaking queue."""
+    result = await db.execute(select(User).where(User.wallet_address == wallet))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    result = await db.execute(
+        select(Fighter).where(Fighter.id == fighter_id, Fighter.owner_id == user.id)
+    )
+    fighter = result.scalar_one_or_none()
+    if not fighter:
+        raise HTTPException(status_code=404, detail="Fighter not found or not owned by you")
+
+    from rawl.services.match_queue import dequeue_fighter
+
+    await dequeue_fighter(fighter_id, fighter.game_id)
+    return {"removed": True}
 
 
 @router.post("/match", status_code=201)

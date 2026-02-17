@@ -69,6 +69,12 @@ class QueueMatchResponse(BaseModel):
     message: str
 
 
+class QueueStatusResponse(BaseModel):
+    queued: bool
+    elapsed_seconds: float = 0
+    queue_size: int = 0
+
+
 class CreateCustomMatchRequest(BaseModel):
     fighter_a_id: uuid.UUID
     fighter_b_id: uuid.UUID
