@@ -12,9 +12,11 @@
 | PlatformConfig | **Initialized** | PDA `CvKx2cxZBYwUUqjFE73s5KggNntgQth5yAWhSLDuPTUj`, 3% fee, 30min timeout |
 | Oracle wallet | **Funded** | `AEghDwMwM3XZjE5DqZyey2jJr6XvUssXVXpGsucREhm4` (0.998 SOL) |
 | Deployer wallet | **Funded** | `HUssQyZHW2jRuAG6qeuvcDu93w5TYZfDecsSwVwyjAjd` (1.33 SOL) |
-| Cloudflare R2 | Pending | S3-compatible storage for replays/models |
-| Railway (backend) | Pending | FastAPI + Celery |
-| Vercel (frontend) | Pending | Next.js 14 |
+| Cloudflare R2 | **Bucket created** | `rawl-replays` bucket, API token pending |
+| Railway (backend) | **Deploying** | 3 services: backend, worker, beat |
+| Railway PostgreSQL | **Provisioned** | `postgres.railway.internal:5432/railway` |
+| Railway Redis | **Provisioned** | `redis.railway.internal:6379` |
+| Vercel (frontend) | **Live** | https://rawl-frontend.vercel.app |
 
 **Deployed:** 2026-02-17
 
@@ -351,21 +353,14 @@ All three services share the same env vars. Set them at the **project level** in
 
 ### Oracle Keypair on Railway
 
-The oracle keypair is a JSON file. Options for getting it into Railway:
+The oracle keypair is loaded via `ORACLE_KEYPAIR_JSON` environment variable (added in `solana/client.py`).
+The client checks this env var first, falling back to `ORACLE_KEYPAIR_PATH` file if not set.
 
-**Option A: Environment variable (recommended for staging)**
-1. Convert keypair to a single-line env var:
-   ```bash
-   cat oracle-keypair.json | tr -d '\n '
-   ```
-2. Add `ORACLE_KEYPAIR_JSON` env var in Railway
-3. Add a startup script or modify `solana/client.py` to read from env var
-
-**Option B: Mount as a file**
-1. Use Railway's volume mounts to place the keypair at `/app/oracle-keypair.json`
-
-**Option C: Bake into Docker image (NOT recommended)**
-- Don't commit secrets to the image
+```bash
+# Convert keypair to env var format:
+cat oracle-keypair.json | tr -d '\n '
+# Set as ORACLE_KEYPAIR_JSON in Railway
+```
 
 ### Vercel Frontend
 
@@ -493,7 +488,9 @@ wsl -d Ubuntu-22.04 -- bash -c '
 
 - Check that `packages/backend/Dockerfile` builds locally: `cd packages/backend && docker build -t rawl-backend .`
 - Ensure `pyproject.toml` has all dependencies
-- stable-retro needs `cmake` + `build-essential` (already in Dockerfile)
+- stable-retro needs `cmake` + `build-essential` (in `Dockerfile.worker` only — backend Dockerfile is lightweight)
+- Dependencies are split: backend API uses base deps only (~500MB image), worker uses `.[emulation]` extras (~4GB with PyTorch)
+- Docker layer caching: deps are installed before source copy, so code changes don't re-download PyTorch
 
 ### Frontend can't reach backend
 
