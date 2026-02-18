@@ -35,6 +35,18 @@ def _get_client_ip(websocket: WebSocket) -> str:
     return client.host if client else "unknown"
 
 
+async def _watch_disconnect(websocket: WebSocket, event: asyncio.Event) -> None:
+    """Wait for a client disconnect and signal the event."""
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg["type"] == "websocket.disconnect":
+                break
+    except Exception:
+        pass
+    event.set()
+
+
 @ws_router.websocket("/match/{match_id}/video")
 async def video_channel(websocket: WebSocket, match_id: str) -> None:
     """Binary WebSocket channel streaming JPEG frames at 30fps.
@@ -64,11 +76,14 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
         extra={"match_id": match_id, "client_ip": client_ip},
     )
 
+    disconnected = asyncio.Event()
+    watcher = asyncio.create_task(_watch_disconnect(websocket, disconnected))
+
     stream_key = f"match:{match_id}:video"
     last_id = "$"  # Only new messages
 
     try:
-        while True:
+        while not disconnected.is_set():
             try:
                 messages = await redis_pool.stream_read(
                     stream_key, last_id=last_id, count=5, block=1000
@@ -95,6 +110,7 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        watcher.cancel()
         _video_connections[match_id].discard(websocket)
         _ip_video_count[client_ip] = max(0, _ip_video_count[client_ip] - 1)
         ws_connections.labels(channel="video").dec()
@@ -136,11 +152,14 @@ async def data_channel(websocket: WebSocket, match_id: str) -> None:
         extra={"match_id": match_id, "client_ip": client_ip},
     )
 
+    disconnected = asyncio.Event()
+    watcher = asyncio.create_task(_watch_disconnect(websocket, disconnected))
+
     stream_key = f"match:{match_id}:data"
     last_id = "$"
 
     try:
-        while True:
+        while not disconnected.is_set():
             try:
                 messages = await redis_pool.stream_read(
                     stream_key, last_id=last_id, count=1, block=1000
@@ -166,6 +185,7 @@ async def data_channel(websocket: WebSocket, match_id: str) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        watcher.cancel()
         _data_connections[match_id].discard(websocket)
         _ip_data_count[client_ip] = max(0, _ip_data_count[client_ip] - 1)
         ws_connections.labels(channel="data").dec()
