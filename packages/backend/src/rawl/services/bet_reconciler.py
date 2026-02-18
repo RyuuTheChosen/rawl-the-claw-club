@@ -204,7 +204,7 @@ async def _reconcile_bets_async():
 
 
 async def _timeout_stale_matches_async():
-    from sqlalchemy import select
+    from sqlalchemy import func, select
 
     from rawl.db.models.match import Match
     from rawl.db.session import worker_session_factory
@@ -215,10 +215,12 @@ async def _timeout_stale_matches_async():
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOCK_TIMEOUT_SECONDS)
 
         async with worker_session_factory() as db:
+            # COALESCE handles rows where locked_at was never set (legacy bug)
+            lock_time = func.coalesce(Match.locked_at, Match.created_at)
             result = await db.execute(
                 select(Match).where(
                     Match.status == "locked",
-                    Match.locked_at < cutoff,
+                    lock_time < cutoff,
                 )
             )
             stale_matches = result.scalars().all()

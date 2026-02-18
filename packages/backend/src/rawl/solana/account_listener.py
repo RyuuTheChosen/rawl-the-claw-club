@@ -133,11 +133,13 @@ class AccountListener:
 
     async def _handle_match_pool_update(self, data: bytes) -> None:
         """Update PostgreSQL match record from on-chain MatchPool state."""
-        from rawl.solana.deserialize import deserialize_match_pool, MatchStatus
-        from rawl.db.session import async_session_factory
+        from datetime import UTC, datetime
+
+        from sqlalchemy import select
+
         from rawl.db.models.match import Match
-        from sqlalchemy import select, update
-        import uuid
+        from rawl.db.session import async_session_factory
+        from rawl.solana.deserialize import MatchStatus, deserialize_match_pool
 
         pool = deserialize_match_pool(data)
         match_id_hex = pool.match_id[:16].hex()
@@ -163,6 +165,13 @@ class AccountListener:
             match.status = db_status
             match.side_a_total = pool.side_a_total / 1e9  # lamports to SOL
             match.side_b_total = pool.side_b_total / 1e9
+
+            # Record transition timestamps
+            if db_status == "locked" and match.locked_at is None:
+                match.locked_at = datetime.now(UTC)
+            elif db_status == "cancelled" and match.cancelled_at is None:
+                match.cancelled_at = datetime.now(UTC)
+
             await db.commit()
 
         # Publish updated odds to Redis
