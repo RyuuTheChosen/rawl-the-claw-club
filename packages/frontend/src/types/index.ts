@@ -26,3 +26,22 @@ export interface PretrainedModel {
   character: string;
   description: string;
 }
+
+export type BetStatus = "pending" | "confirmed" | "claimed" | "refunded" | "expired";
+
+export interface Bet {
+  id: string;
+  match_id: string;
+  wallet_address: string;
+  side: BetSide;
+  amount_sol: number;
+  onchain_bet_pda: string | null;
+  status: BetStatus;
+  created_at: string;
+  claimed_at: string | null;
+  game_id: string;
+  fighter_a_name: string | null;
+  fighter_b_name: string | null;
+  match_status: string;
+  match_winner_id: string | null;
+}

@@ -13,6 +13,7 @@ import {
   buildClaimPayoutData,
   buildRefundBetData,
 } from "@/lib/solana";
+import { syncBetStatus } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -113,7 +114,7 @@ export function useClaimPayout() {
   const [error, setError] = useState<string | null>(null);
 
   const claimPayout = useCallback(
-    async (matchId: string): Promise<string | null> => {
+    async (matchId: string, betId?: string): Promise<string | null> => {
       if (!publicKey) {
         setError("Wallet not connected");
         return null;
@@ -154,6 +155,15 @@ export function useClaimPayout() {
         const signature = await sendTransaction(tx, connection);
         await connection.confirmTransaction(signature, "confirmed");
 
+        // Sync bet status in backend (non-critical)
+        if (betId) {
+          try {
+            await syncBetStatus(betId, publicKey.toBase58());
+          } catch {
+            console.warn("Failed to sync bet status after claim");
+          }
+        }
+
         return signature;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to claim payout";
@@ -179,7 +189,7 @@ export function useRefundBet() {
   const [error, setError] = useState<string | null>(null);
 
   const refundBet = useCallback(
-    async (matchId: string): Promise<string | null> => {
+    async (matchId: string, betId?: string): Promise<string | null> => {
       if (!publicKey) {
         setError("Wallet not connected");
         return null;
@@ -217,6 +227,15 @@ export function useRefundBet() {
         const tx = new Transaction().add(instruction);
         const signature = await sendTransaction(tx, connection);
         await connection.confirmTransaction(signature, "confirmed");
+
+        // Sync bet status in backend (non-critical)
+        if (betId) {
+          try {
+            await syncBetStatus(betId, publicKey.toBase58());
+          } catch {
+            console.warn("Failed to sync bet status after refund");
+          }
+        }
 
         return signature;
       } catch (err) {

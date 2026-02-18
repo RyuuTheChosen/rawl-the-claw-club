@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Swords, Trophy, LayoutDashboard, Menu, Monitor } from "lucide-react";
+import { Swords, Trophy, LayoutDashboard, Menu, Monitor, Coins } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useUiStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ const WalletMultiButton = dynamic(
 const navLinks = [
   { href: "/lobby", label: "Lobby", icon: Swords },
   { href: "/leaderboard", label: "Scores", icon: Trophy },
+  { href: "/bets", label: "Bets", icon: Coins },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ];
 

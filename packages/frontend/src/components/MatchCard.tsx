@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { Match } from "@/types";
@@ -15,6 +16,10 @@ interface MatchCardProps {
 export function MatchCard({ match }: MatchCardProps) {
   const isLive = match.status === "locked";
   const poolTotal = (match.side_a_total + match.side_b_total) / 1e9;
+  const [countdownDone, setCountdownDone] = useState(false);
+
+  // Reset countdown state when match changes
+  useEffect(() => setCountdownDone(false), [match.id]);
 
   return (
     <Link href={`/arena/${match.id}`}>
@@ -47,11 +52,18 @@ export function MatchCard({ match }: MatchCardProps) {
           </span>
         </div>
 
-        {/* Countdown for open matches */}
-        {match.status === "open" && match.starts_at && (
+        {/* Countdown for open matches — hides when done */}
+        {match.status === "open" && match.starts_at && !countdownDone && (
           <div className="mb-2 flex items-center justify-center gap-2 rounded bg-neon-yellow/10 py-1.5">
             <span className="font-pixel text-[7px] text-neon-yellow">STARTS IN</span>
-            <Countdown targetDate={match.starts_at} />
+            <Countdown targetDate={match.starts_at} onComplete={() => setCountdownDone(true)} />
+          </div>
+        )}
+
+        {/* Refund banner for cancelled matches with pools */}
+        {match.status === "cancelled" && match.has_pool && (
+          <div className="mb-2 rounded bg-neon-yellow/10 py-1.5 text-center">
+            <span className="font-pixel text-[7px] text-neon-yellow">REFUND AVAILABLE</span>
           </div>
         )}
 
@@ -59,7 +71,7 @@ export function MatchCard({ match }: MatchCardProps) {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="font-pixel text-[8px]">Bo{match.match_format}</span>
           <span className="text-[10px] uppercase">{match.match_type}</span>
-          {match.has_pool && poolTotal > 0 && (
+          {match.has_pool && poolTotal >= 0.01 && (
             <span className="font-mono text-neon-orange">
               {poolTotal.toFixed(2)} SOL
             </span>

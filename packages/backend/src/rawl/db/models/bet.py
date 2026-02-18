@@ -26,7 +26,7 @@ class Bet(Base):
     onchain_bet_pda: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending"
-    )  # pending, confirmed, claimed, refunded
+    )  # pending, confirmed, claimed, refunded, expired
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

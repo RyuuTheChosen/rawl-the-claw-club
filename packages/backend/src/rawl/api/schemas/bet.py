@@ -19,6 +19,14 @@ class BetResponse(BaseModel):
     claimed_at: datetime | None = None
 
 
+class BetWithMatchResponse(BetResponse):
+    game_id: str
+    fighter_a_name: str | None = None
+    fighter_b_name: str | None = None
+    match_status: str
+    match_winner_id: uuid.UUID | None = None
+
+
 _BASE58_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 
 

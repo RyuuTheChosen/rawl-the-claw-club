@@ -10,10 +10,10 @@ import { PageTransition } from "@/components/PageTransition";
 import { StaggeredList } from "@/components/StaggeredList";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const FILTERS = ["all", "open", "locked", "resolved"] as const;
+const FILTERS = ["all", "open", "locked", "resolved", "cancelled"] as const;
 
 export default function LobbyPage() {
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>("open");
 
   const fetcher = useCallback((): Promise<PaginatedResponse<Match>> => {
     const params: Record<string, string> = {};

@@ -82,6 +82,14 @@ celery.conf.beat_schedule = {
             minute=settings.seasonal_reset_cron_minute,
         ),
     },
+    "bet-reconciler": {
+        "task": "rawl.services.bet_reconciler.reconcile_bets",
+        "schedule": 60.0,
+    },
+    "timeout-stale-matches": {
+        "task": "rawl.services.bet_reconciler.timeout_stale_matches",
+        "schedule": 60.0,
+    },
 }
 
 # Import tasks so they are registered
@@ -89,6 +97,7 @@ celery.autodiscover_tasks(["rawl.engine"])
 celery.conf.include = [
     "rawl.services.match_scheduler",
     "rawl.services.health_checker",
+    "rawl.services.bet_reconciler",
     "rawl.training.worker",
     "rawl.training.validation",
 ]

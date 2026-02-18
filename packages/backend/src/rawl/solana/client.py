@@ -194,6 +194,22 @@ class SolanaClient:
         pda, _ = derive_platform_config_pda()
         return await self._get_account(pda, deserialize_platform_config)
 
+    async def account_exists(self, pubkey: Pubkey) -> bool | None:
+        """Check if an on-chain account exists.
+
+        Returns True if account exists, False if it does not, None on RPC error.
+        This three-state return is critical for reconciliation — callers must
+        distinguish "account gone" (safe to mark refunded) from "RPC down"
+        (must skip, not falsely mark).
+        """
+        await self._ensure_initialized()
+        try:
+            resp = await self._client.get_account_info(pubkey, commitment=Confirmed)
+            return resp.value is not None
+        except Exception:
+            logger.exception("RPC error checking account", extra={"pubkey": str(pubkey)})
+            return None
+
     async def _get_account(self, pubkey: Pubkey, deserializer):
         """Generic account fetch + deserialize."""
         await self._ensure_initialized()

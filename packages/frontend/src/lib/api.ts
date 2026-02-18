@@ -1,4 +1,4 @@
-import type { Match, Fighter, PaginatedResponse, LeaderboardEntry, PretrainedModel } from "@/types";
+import type { Match, Fighter, PaginatedResponse, LeaderboardEntry, PretrainedModel, Bet } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
@@ -65,4 +65,23 @@ export async function getLeaderboard(
 
 export async function getPretrainedModels(): Promise<PretrainedModel[]> {
   return fetchJson("/pretrained");
+}
+
+export async function getBets(
+  wallet: string,
+  matchId?: string,
+): Promise<Bet[]> {
+  const searchParams = new URLSearchParams({ wallet });
+  if (matchId) searchParams.set("match_id", matchId);
+  return fetchJson(`/bets?${searchParams.toString()}`);
+}
+
+export async function syncBetStatus(
+  betId: string,
+  walletAddress: string,
+): Promise<Bet> {
+  return fetchJson(`/bets/${betId}/sync`, {
+    method: "POST",
+    body: JSON.stringify({ wallet_address: walletAddress }),
+  });
 }

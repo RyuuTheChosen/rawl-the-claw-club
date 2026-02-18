@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { MatchDataMessage } from "@/types";
+import { Bet, MatchDataMessage } from "@/types";
+import { getBets, syncBetStatus } from "@/lib/api";
 import { usePlaceBet, useClaimPayout, useRefundBet } from "@/hooks/useBetting";
 import { ArcadeCard } from "./ArcadeCard";
 import { ArcadeButton } from "./ArcadeButton";
@@ -18,13 +19,44 @@ interface BettingPanelProps {
 }
 
 export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPanelProps) {
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const [side, setSide] = useState<"a" | "b">("a");
   const [amount, setAmount] = useState("");
   const { placeBet, submitting, error } = usePlaceBet();
   const { claimPayout, submitting: claiming, error: claimError } = useClaimPayout();
   const { refundBet, submitting: refunding, error: refundError } = useRefundBet();
   const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [existingBet, setExistingBet] = useState<Bet | null>(null);
+  const [loadingBet, setLoadingBet] = useState(false);
+
+  // Fetch existing bet for this match
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      setExistingBet(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingBet(true);
+    getBets(publicKey.toBase58(), matchId)
+      .then((bets) => {
+        if (!cancelled) setExistingBet(bets.length > 0 ? bets[0] : null);
+      })
+      .catch(() => {
+        if (!cancelled) setExistingBet(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingBet(false);
+      });
+    return () => { cancelled = true; };
+  }, [connected, publicKey, matchId]);
+
+  const refreshBet = async () => {
+    if (!publicKey) return;
+    try {
+      const bets = await getBets(publicKey.toBase58(), matchId);
+      setExistingBet(bets.length > 0 ? bets[0] : null);
+    } catch { /* ignore */ }
+  };
 
   const handlePlaceBet = async () => {
     if (!connected || !amount) return;
@@ -32,17 +64,35 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
     if (sig) {
       setTxSignature(sig);
       setAmount("");
+      // Refresh to show existing bet
+      setTimeout(refreshBet, 1000);
     }
   };
 
   const handleClaim = async () => {
-    const sig = await claimPayout(matchId);
-    if (sig) setTxSignature(sig);
+    const sig = await claimPayout(matchId, existingBet?.id);
+    if (sig) {
+      setTxSignature(sig);
+      if (existingBet && publicKey) {
+        try {
+          await syncBetStatus(existingBet.id, publicKey.toBase58());
+        } catch { /* non-critical */ }
+      }
+      await refreshBet();
+    }
   };
 
   const handleRefund = async () => {
-    const sig = await refundBet(matchId);
-    if (sig) setTxSignature(sig);
+    const sig = await refundBet(matchId, existingBet?.id);
+    if (sig) {
+      setTxSignature(sig);
+      if (existingBet && publicKey) {
+        try {
+          await syncBetStatus(existingBet.id, publicKey.toBase58());
+        } catch { /* non-critical */ }
+      }
+      await refreshBet();
+    }
   };
 
   if (!connected) {
@@ -64,6 +114,98 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
   const isResolved = matchStatus === "resolved";
   const isCancelled = matchStatus === "cancelled";
 
+  // Existing bet display
+  if (existingBet) {
+    const betSideLabel = existingBet.side === "a" ? "P1" : "P2";
+    const betSideColor = existingBet.side === "a" ? "text-neon-cyan" : "text-neon-pink";
+
+    return (
+      <ArcadeCard hover={false}>
+        <h3 className="mb-3 font-pixel text-[10px] text-foreground">YOUR BET</h3>
+
+        <div className="mb-3 rounded-md bg-muted/50 px-3 py-2.5 text-center">
+          <span className="font-mono text-sm text-neon-orange">
+            {existingBet.amount_sol.toFixed(2)} SOL
+          </span>
+          <span className="text-xs text-muted-foreground"> on </span>
+          <span className={cn("font-semibold text-sm", betSideColor)}>
+            {betSideLabel}
+          </span>
+        </div>
+
+        {/* Already refunded/claimed */}
+        {existingBet.status === "refunded" && (
+          <div className="mb-3 rounded-md bg-neon-green/10 py-2 text-center">
+            <span className="font-pixel text-[10px] text-neon-green">REFUNDED</span>
+          </div>
+        )}
+        {existingBet.status === "claimed" && (
+          <div className="mb-3 rounded-md bg-neon-green/10 py-2 text-center">
+            <span className="font-pixel text-[10px] text-neon-green">CLAIMED</span>
+          </div>
+        )}
+        {existingBet.status === "expired" && (
+          <div className="mb-3 rounded-md bg-muted/50 py-2 text-center">
+            <span className="font-pixel text-[10px] text-muted-foreground">EXPIRED</span>
+          </div>
+        )}
+
+        {/* Cancelled + confirmed → refund */}
+        {isCancelled && existingBet.status === "confirmed" && (
+          <ArcadeButton
+            onClick={handleRefund}
+            disabled={refunding}
+            className="w-full bg-neon-yellow text-background hover:bg-neon-yellow/90"
+          >
+            {refunding ? "REFUNDING..." : "REFUND BET"}
+          </ArcadeButton>
+        )}
+
+        {/* Resolved + confirmed → claim */}
+        {isResolved && existingBet.status === "confirmed" && (
+          <ArcadeButton
+            onClick={handleClaim}
+            disabled={claiming}
+            variant="primary"
+            className="w-full bg-neon-green text-background hover:bg-neon-green/90"
+          >
+            {claiming ? "CLAIMING..." : "CLAIM PAYOUT"}
+          </ArcadeButton>
+        )}
+
+        {/* Active match — show live indicator */}
+        {existingBet.status === "confirmed" && (isOpen || matchStatus === "locked") && (
+          <div className="flex items-center justify-center gap-2 py-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-neon-green" />
+            <span className="font-pixel text-[8px] text-neon-green">MATCH IN PROGRESS</span>
+          </div>
+        )}
+
+        {(error || claimError || refundError) && (
+          <div className="mt-3 font-pixel text-[8px] text-neon-red">
+            {error || claimError || refundError}
+          </div>
+        )}
+
+        {txSignature && (
+          <div className="mt-2 text-center font-mono text-[10px] text-muted-foreground">
+            TX: {txSignature.slice(0, 16)}...
+          </div>
+        )}
+
+        {poolTotal > 0 && (
+          <div className="mt-3 border-t border-border pt-2 text-center">
+            <span className="font-pixel text-[8px] text-muted-foreground">TOTAL POOL </span>
+            <span className="font-mono text-xs text-neon-orange">
+              {(poolTotal / 1e9).toFixed(2)} SOL
+            </span>
+          </div>
+        )}
+      </ArcadeCard>
+    );
+  }
+
+  // No existing bet — show place bet form
   return (
     <ArcadeCard hover={false}>
       <h3 className="mb-3 font-pixel text-[10px] text-foreground">PLACE BET</h3>
@@ -140,25 +282,19 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
       )}
 
       {isResolved && (
-        <ArcadeButton
-          onClick={handleClaim}
-          disabled={claiming}
-          variant="primary"
-          className="w-full bg-neon-green text-background hover:bg-neon-green/90"
-        >
-          {claiming ? "CLAIMING..." : "CLAIM PAYOUT"}
-        </ArcadeButton>
+        <div className="py-4 text-center">
+          <span className="font-pixel text-[10px] text-muted-foreground">
+            MATCH RESOLVED — NO BET PLACED
+          </span>
+        </div>
       )}
 
       {isCancelled && (
-        <ArcadeButton
-          onClick={handleRefund}
-          disabled={refunding}
-          variant="primary"
-          className="w-full bg-neon-yellow text-background hover:bg-neon-yellow/90"
-        >
-          {refunding ? "REFUNDING..." : "REFUND BET"}
-        </ArcadeButton>
+        <div className="py-4 text-center">
+          <span className="font-pixel text-[10px] text-muted-foreground">
+            MATCH CANCELLED
+          </span>
+        </div>
       )}
 
       {(error || claimError || refundError) && (

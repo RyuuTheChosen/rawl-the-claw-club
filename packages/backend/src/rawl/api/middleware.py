@@ -20,6 +20,8 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "GET:/api/fighters": (30, 60),
     "GET:/api/leaderboard": (30, 60),
     "GET:/api/odds": (120, 60),
+    "GET:/api/bets": (30, 60),
+    "POST:/api/bets": (10, 60),
     # Gateway has a blanket 60/min per API key
 }
 
