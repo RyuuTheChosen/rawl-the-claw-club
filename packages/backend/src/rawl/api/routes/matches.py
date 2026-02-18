@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, or_, select
@@ -12,6 +14,8 @@ from rawl.api.schemas.match import CreateMatchRequest, MatchDetailResponse, Matc
 from rawl.db.models.fighter import Fighter
 from rawl.db.models.match import Match
 from rawl.dependencies import DbSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["matches"])
 
@@ -131,3 +135,50 @@ async def create_match(
     await db.commit()
     await db.refresh(match)
     return MatchResponse.model_validate(match, from_attributes=True)
+
+
+@router.post("/matches/{match_id}/cancel", response_model=MatchResponse)
+async def cancel_match(
+    db: DbSession,
+    match_id: uuid.UUID,
+    _auth: InternalAuth,
+):
+    """Cancel a match (internal/admin only). Cancels on-chain if has_pool."""
+    fa = aliased(Fighter, name="fa")
+    fb = aliased(Fighter, name="fb")
+    query = (
+        select(Match, fa.name.label("fighter_a_name"), fb.name.label("fighter_b_name"))
+        .outerjoin(fa, Match.fighter_a_id == fa.id)
+        .outerjoin(fb, Match.fighter_b_id == fb.id)
+        .where(Match.id == match_id)
+    )
+    result = await db.execute(query)
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    match, name_a, name_b = row
+
+    if match.status in ("resolved", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Match already {match.status}")
+
+    # Cancel on-chain if this match has a betting pool
+    if match.has_pool:
+        from rawl.engine.oracle_client import oracle_client
+
+        sig = await oracle_client.submit_cancel(str(match_id), reason="admin_cancel")
+        if sig:
+            logger.info("Match cancelled on-chain", extra={"match_id": str(match_id), "sig": sig})
+        else:
+            logger.warning(
+                "On-chain cancel failed, updating DB only",
+                extra={"match_id": str(match_id)},
+            )
+
+    match.status = "cancelled"
+    match.cancel_reason = "admin_cancel"
+    match.cancelled_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(match)
+
+    return _match_to_response(match, name_a, name_b)
