@@ -26,13 +26,7 @@ function isActive(bet: Bet): boolean {
 function isClaimable(bet: Bet): boolean {
   if (bet.status !== "confirmed") return false;
   if (bet.match_status === "cancelled") return true;
-  if (bet.match_status === "resolved") {
-    // Won if their side's fighter is the winner
-    const wonSide = bet.side === "a" ? bet.match_winner_id === null : false;
-    // Actually, we need to check fighter IDs — but we don't have them in Bet.
-    // Simpler: if match resolved and bet confirmed, user may have won (show claim option)
-    return true;
-  }
+  if (bet.match_status === "resolved" && bet.winner_side === bet.side) return true;
   return false;
 }
 
@@ -142,8 +136,8 @@ function BetCard({
       );
     }
 
-    // Confirmed + resolved → claim (user may have won)
-    if (effectiveStatus === "confirmed" && bet.match_status === "resolved") {
+    // Confirmed + resolved + won → claim
+    if (effectiveStatus === "confirmed" && bet.match_status === "resolved" && bet.winner_side === bet.side) {
       return (
         <ArcadeButton
           size="sm"
@@ -153,6 +147,13 @@ function BetCard({
         >
           {claiming ? "CLAIMING..." : "CLAIM PAYOUT"}
         </ArcadeButton>
+      );
+    }
+
+    // Confirmed + resolved + lost → show loss
+    if (effectiveStatus === "confirmed" && bet.match_status === "resolved" && bet.winner_side && bet.winner_side !== bet.side) {
+      return (
+        <span className="font-pixel text-[8px] text-neon-red">LOST</span>
       );
     }
 

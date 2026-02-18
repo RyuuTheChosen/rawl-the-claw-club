@@ -28,6 +28,12 @@ def _bet_with_match(bet: Bet, match: Match, name_a: str | None, name_b: str | No
     data["fighter_b_name"] = name_b
     data["match_status"] = match.status
     data["match_winner_id"] = match.winner_id
+    # Derive winner side so frontend can compare directly against bet.side
+    if match.winner_id and match.status == "resolved":
+        if match.winner_id == match.fighter_a_id:
+            data["winner_side"] = "a"
+        elif match.winner_id == match.fighter_b_id:
+            data["winner_side"] = "b"
     return BetWithMatchResponse.model_validate(data)
 
 

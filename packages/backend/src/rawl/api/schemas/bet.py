@@ -25,6 +25,7 @@ class BetWithMatchResponse(BetResponse):
     fighter_b_name: str | None = None
     match_status: str
     match_winner_id: uuid.UUID | None = None
+    winner_side: str | None = None  # "a", "b", or null
 
 
 _BASE58_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")

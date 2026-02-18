@@ -44,4 +44,5 @@ export interface Bet {
   fighter_b_name: string | null;
   match_status: string;
   match_winner_id: string | null;
+  winner_side: "a" | "b" | null;
 }
