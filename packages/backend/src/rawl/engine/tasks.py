@@ -185,3 +185,52 @@ async def _retry_failed_uploads_async():
     retried = await retry_failed_uploads()
     if retried:
         logger.info("Retried failed uploads", extra={"count": retried})
+
+
+@celery.task(name="rawl.engine.tasks.normalize_pretrained_models")
+def normalize_pretrained_models():
+    """One-time task: normalize all pretrained and reference models in S3.
+
+    Re-saves models in the current Python/SB3 native format, eliminating
+    cross-version cloudpickle and state_dict issues.
+
+    Invoke manually after deploy:
+        celery -A rawl.celery_app call rawl.engine.tasks.normalize_pretrained_models
+    """
+    celery_async_run(_normalize_pretrained_async())
+
+
+async def _normalize_pretrained_async():
+    from rawl.api.routes.pretrained import PRETRAINED_MODELS
+    from rawl.config import settings
+    from rawl.engine.model_normalizer import normalize_model
+
+    success = 0
+    failed = 0
+
+    # Pretrained models
+    for model_id, info in PRETRAINED_MODELS.items():
+        s3_key = info["s3_key"]
+        logger.info("Normalizing pretrained model", extra={"model_id": model_id})
+        model = await normalize_model(s3_key)
+        if model is not None:
+            success += 1
+        else:
+            failed += 1
+            logger.error("Failed to normalize pretrained model", extra={"model_id": model_id})
+
+    # Reference models (used for calibration)
+    for elo in settings.calibration_reference_elo_list:
+        s3_key = f"reference/sf2ce/{elo}"
+        logger.info("Normalizing reference model", extra={"elo": elo})
+        model = await normalize_model(s3_key)
+        if model is not None:
+            success += 1
+        else:
+            failed += 1
+            logger.error("Failed to normalize reference model", extra={"elo": elo})
+
+    logger.info(
+        "Normalization migration complete",
+        extra={"success": success, "failed": failed},
+    )

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from stable_baselines3 import PPO
 
+from rawl.engine.model_normalizer import COMPAT_CUSTOM_OBJECTS, TRUSTED_PREFIXES
 from rawl.s3_client import download_bytes
 
 logger = logging.getLogger(__name__)
@@ -14,9 +15,6 @@ logger = logging.getLogger(__name__)
 # In-memory cache by S3 key (bounded)
 _model_cache: dict[str, PPO] = {}
 _MODEL_CACHE_MAXSIZE = 16
-
-# Trusted S3 key prefixes for model loading
-_TRUSTED_PREFIXES = ("models/", "pretrained/", "reference/")
 
 
 async def load_fighter_model(s3_key: str, game_id: str) -> PPO:
@@ -36,7 +34,7 @@ async def load_fighter_model(s3_key: str, game_id: str) -> PPO:
         RuntimeError: If download or load fails, or path is untrusted
     """
     # Validate S3 key starts with a trusted prefix
-    if not any(s3_key.startswith(p) for p in _TRUSTED_PREFIXES):
+    if not any(s3_key.startswith(p) for p in TRUSTED_PREFIXES):
         raise RuntimeError(f"Untrusted model path: {s3_key}")
 
     # Check cache
@@ -56,7 +54,10 @@ async def load_fighter_model(s3_key: str, game_id: str) -> PPO:
         tmp_path = tmp.name
 
     try:
-        model = PPO.load(tmp_path)
+        # Defense-in-depth: compat shims for any un-normalized legacy models.
+        # Normally models are normalized at validation/upload time, but this
+        # catches edge cases where an old-format model reaches serving.
+        model = PPO.load(tmp_path, custom_objects=COMPAT_CUSTOM_OBJECTS, device="cpu")
     except Exception as e:
         raise RuntimeError(f"Failed to load model {s3_key}: {e}") from e
     finally:
