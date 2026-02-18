@@ -40,7 +40,7 @@ class RetroEngine(EmulationEngine):
     # ------------------------------------------------------------------
 
     def start(self) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-        import retro
+        import stable_retro as retro
 
         logger.info(
             "Starting RetroEngine",

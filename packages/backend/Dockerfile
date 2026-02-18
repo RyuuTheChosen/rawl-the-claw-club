@@ -22,4 +22,4 @@ COPY alembic/ alembic/
 
 EXPOSE 8080
 
-CMD ["uvicorn", "rawl.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "rawl.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--forwarded-allow-ips", "*"]

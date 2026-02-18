@@ -9,7 +9,12 @@ from rawl.celery_app import celery, celery_async_run, get_sync_redis
 logger = logging.getLogger(__name__)
 
 
-@celery.task(name="rawl.engine.tasks.execute_match", bind=True)
+@celery.task(
+    name="rawl.engine.tasks.execute_match",
+    bind=True,
+    soft_time_limit=2100,  # 35 min — raises SoftTimeLimitExceeded
+    time_limit=2400,       # 40 min — SIGKILL
+)
 def execute_match(
     self,
     match_id: str,

@@ -232,6 +232,18 @@ async def run_match(
                     )
                     last_heartbeat = now
 
+            # Safety cap — prevent infinite matches
+            if frame_count >= settings.max_match_frames:
+                logger.error(
+                    "Match exceeded max frames, cancelling",
+                    extra={"match_id": match_id, "frames": frame_count},
+                )
+                if not calibration:
+                    await oracle_client.submit_cancel(
+                        match_id, reason="max_frames_exceeded"
+                    )
+                return None
+
         # Step 5: Post-loop handling
         if not match_result:
             logger.error(f"Match {match_id} terminated without winner")

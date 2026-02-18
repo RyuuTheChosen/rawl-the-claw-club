@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     streaming_fps: int = 30
     data_channel_hz: int = 10
     heartbeat_interval_seconds: int = 15
+    max_match_frames: int = 54_000  # ~30 min at 30fps
     pre_match_delay_seconds: int = 60
 
     # Training tiers
