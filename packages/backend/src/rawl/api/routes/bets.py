@@ -117,15 +117,22 @@ async def sync_bet_status(
     if bet.status != "confirmed":
         return _bet_with_match(bet, match, name_a, name_b)
 
-    # Check on-chain state
-    if not bet.onchain_bet_pda:
-        return _bet_with_match(bet, match, name_a, name_b)
-
+    # Derive PDA if not stored (may have failed at record time)
     from solders.pubkey import Pubkey
 
     from rawl.solana.client import solana_client
 
-    pda = Pubkey.from_string(bet.onchain_bet_pda)
+    if bet.onchain_bet_pda:
+        pda = Pubkey.from_string(bet.onchain_bet_pda)
+    else:
+        try:
+            pda, _ = derive_bet_pda(str(bet.match_id), Pubkey.from_string(bet.wallet_address))
+            # Backfill the PDA for future lookups
+            bet.onchain_bet_pda = str(pda)
+            await db.flush()
+        except Exception:
+            logger.warning("Cannot derive PDA for bet %s", bet_id)
+            return _bet_with_match(bet, match, name_a, name_b)
     exists = await solana_client.account_exists(pda)
 
     if exists is None:

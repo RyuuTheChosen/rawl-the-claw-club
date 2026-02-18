@@ -62,10 +62,28 @@ async def _reconcile_bets_async():
 
         for bet, match in rows:
             try:
-                if not bet.onchain_bet_pda:
-                    continue
+                # Derive PDA if not stored (may have failed at record time)
+                if bet.onchain_bet_pda:
+                    pda = Pubkey.from_string(bet.onchain_bet_pda)
+                else:
+                    from rawl.solana.pda import derive_bet_pda
 
-                pda = Pubkey.from_string(bet.onchain_bet_pda)
+                    try:
+                        pda, _ = derive_bet_pda(
+                            str(bet.match_id), Pubkey.from_string(bet.wallet_address)
+                        )
+                        # Backfill PDA
+                        async with worker_session_factory() as db:
+                            result = await db.execute(
+                                select(Bet).where(Bet.id == bet.id)
+                            )
+                            b = result.scalar_one_or_none()
+                            if b:
+                                b.onchain_bet_pda = str(pda)
+                                await db.commit()
+                    except Exception:
+                        logger.warning("Cannot derive PDA for bet %s", bet.id)
+                        continue
                 exists = await solana_client.account_exists(pda)
 
                 if exists is None:
@@ -126,8 +144,20 @@ async def _reconcile_bets_async():
 
         for bet in stale_pending:
             try:
-                if bet.onchain_bet_pda:
-                    pda = Pubkey.from_string(bet.onchain_bet_pda)
+                pda_str = bet.onchain_bet_pda
+                if not pda_str:
+                    from rawl.solana.pda import derive_bet_pda as _derive
+
+                    try:
+                        _pda, _ = _derive(
+                            str(bet.match_id), Pubkey.from_string(bet.wallet_address)
+                        )
+                        pda_str = str(_pda)
+                    except Exception:
+                        pass
+
+                if pda_str:
+                    pda = Pubkey.from_string(pda_str)
                     exists = await solana_client.account_exists(pda)
 
                     if exists is None:
