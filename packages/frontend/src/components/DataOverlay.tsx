@@ -20,6 +20,8 @@ interface DataOverlayProps {
 }
 
 export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps) {
+  // Backend sends health already normalized to 0.0-1.0 (divided by MAX_HEALTH).
+  // MAX_HEALTH_MAP is retained only for the labels (raw value display).
   const maxHealth = gameId ? (MAX_HEALTH_MAP[gameId] ?? DEFAULT_MAX_HEALTH) : DEFAULT_MAX_HEALTH;
   const winsNeeded = Math.ceil(matchFormat / 2);
 
@@ -53,7 +55,7 @@ export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps)
           {/* P1 health */}
           <div className="flex-1">
             <div className="mb-0.5 font-pixel text-[8px] text-neon-cyan">P1</div>
-            <HealthBar health={data.health_a / maxHealth} side="left" label={`${data.health_a}`} />
+            <HealthBar health={data.health_a} side="left" label={`${Math.round(data.health_a * maxHealth)}`} />
             {data.team_health_a && data.team_health_a.length > 1 && (
               <div className="mt-0.5 flex gap-0.5">
                 {data.team_health_a.map((h, i) => (
@@ -86,7 +88,7 @@ export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps)
           {/* P2 health */}
           <div className="flex-1">
             <div className="mb-0.5 text-right font-pixel text-[8px] text-neon-pink">P2</div>
-            <HealthBar health={data.health_b / maxHealth} side="right" label={`${data.health_b}`} />
+            <HealthBar health={data.health_b} side="right" label={`${Math.round(data.health_b * maxHealth)}`} />
             {data.team_health_b && data.team_health_b.length > 1 && (
               <div className="mt-0.5 flex gap-0.5">
                 {data.team_health_b.map((h, i) => (

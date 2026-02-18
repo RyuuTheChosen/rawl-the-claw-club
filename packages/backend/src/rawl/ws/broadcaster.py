@@ -85,8 +85,9 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
     try:
         while not disconnected.is_set():
             try:
+                # Read a large batch to skip intermediate frames and catch up
                 messages = await redis_pool.stream_read(
-                    stream_key, last_id=last_id, count=5, block=1000
+                    stream_key, last_id=last_id, count=60, block=50
                 )
             except Exception as e:
                 logger.warning("Redis stream read error (video)", extra={"match_id": match_id, "error": str(e)})
@@ -101,7 +102,7 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
                 for msg_id, data in entries:
                     last_id = msg_id
                     latest_frame = data.get(b"frame", b"")
-            # Only send the last frame from this batch
+            # Only send the last (most recent) frame from this batch
             if latest_frame:
                 try:
                     await websocket.send_bytes(latest_frame)

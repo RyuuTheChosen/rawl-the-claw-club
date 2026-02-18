@@ -42,10 +42,10 @@ class Settings(BaseSettings):
 
     # Match defaults
     default_match_format: int = 3
-    streaming_fps: int = 30
+    streaming_fps: int = 60
     data_channel_hz: int = 10
     heartbeat_interval_seconds: int = 15
-    max_match_frames: int = 54_000  # ~30 min at 30fps
+    max_match_frames: int = 108_000  # ~30 min at 60fps
     pre_match_delay_seconds: int = 60
 
     # Training tiers
