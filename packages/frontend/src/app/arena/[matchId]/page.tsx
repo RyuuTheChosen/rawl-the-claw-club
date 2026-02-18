@@ -121,7 +121,7 @@ export default function ArenaPage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <MatchViewer matchId={matchId} matchFormat={match.match_format} gameId={match.game_id} data={data} dataConnected={dataConnected} />
           <div className="space-y-4">
-            <BettingPanel matchId={matchId} data={data} matchStatus={effectiveStatus} startsAt={match.starts_at} />
+            <BettingPanel matchId={matchId} data={data} matchStatus={effectiveStatus} startsAt={match.starts_at} winningSide={winner?.side ?? null} />
             {/* Match Info card */}
             <div className="arcade-border p-4">
               <h3 className="mb-2 font-pixel text-[10px] text-foreground">MATCH INFO</h3>

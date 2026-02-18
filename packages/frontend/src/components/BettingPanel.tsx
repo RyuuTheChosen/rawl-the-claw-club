@@ -16,9 +16,10 @@ interface BettingPanelProps {
   data: MatchDataMessage | null;
   matchStatus?: string;
   startsAt?: string | null;
+  winningSide?: "a" | "b" | null;
 }
 
-export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPanelProps) {
+export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide = null }: BettingPanelProps) {
   const { connected, publicKey } = useWallet();
   const [side, setSide] = useState<"a" | "b">("a");
   const [amount, setAmount] = useState("");
@@ -122,6 +123,9 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
   const isResolved = matchStatus === "resolved";
   const isCancelled = matchStatus === "cancelled";
 
+  // Determine if current user's bet won or lost
+  const userWon = existingBet && winningSide ? existingBet.side === winningSide : null;
+
   // Existing bet display
   if (existingBet) {
     const betSideLabel = existingBet.side === "a" ? "P1" : "P2";
@@ -169,8 +173,8 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
           </ArcadeButton>
         )}
 
-        {/* Resolved + confirmed → claim */}
-        {isResolved && existingBet.status === "confirmed" && (
+        {/* Resolved + confirmed → claim (winner) or lost (loser) */}
+        {isResolved && existingBet.status === "confirmed" && userWon === true && (
           <ArcadeButton
             onClick={handleClaim}
             disabled={claiming}
@@ -179,6 +183,11 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
           >
             {claiming ? "CLAIMING..." : "CLAIM PAYOUT"}
           </ArcadeButton>
+        )}
+        {isResolved && existingBet.status === "confirmed" && userWon === false && (
+          <div className="mb-3 rounded-md bg-neon-red/10 py-2 text-center">
+            <span className="font-pixel text-[10px] text-neon-red">BET LOST</span>
+          </div>
         )}
 
         {/* Active match — show live indicator */}
