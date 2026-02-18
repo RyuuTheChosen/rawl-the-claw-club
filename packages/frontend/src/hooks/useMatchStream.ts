@@ -48,9 +48,34 @@ export function useMatchVideoStream(
 ) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const latestData = useRef<ArrayBuffer | null>(null);
+  const rafId = useRef(0);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+
     if (!matchId || !canvasRef.current) return;
+
+    function renderLatest() {
+      rafId.current = 0;
+      const data = latestData.current;
+      if (!data || !mountedRef.current) return;
+      latestData.current = null;
+      const blob = new Blob([data], { type: "image/jpeg" });
+      createImageBitmap(blob).then((bitmap) => {
+        if (!mountedRef.current) {
+          bitmap.close();
+          return;
+        }
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext("2d");
+        if (ctx && canvas) {
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        }
+        bitmap.close();
+      });
+    }
 
     const wsUrl = `${WS_BASE}/ws/match/${matchId}/video`;
     const ws = new WebSocket(wsUrl);
@@ -61,23 +86,18 @@ export function useMatchVideoStream(
     ws.onclose = () => setConnected(false);
     ws.onerror = () => setConnected(false);
     ws.onmessage = (event) => {
-      const blob = new Blob([event.data], { type: "image/jpeg" });
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        const ctx = canvasRef.current?.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-        }
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
+      latestData.current = event.data as ArrayBuffer;
+      if (!rafId.current) {
+        rafId.current = requestAnimationFrame(renderLatest);
+      }
     };
 
     return () => {
+      mountedRef.current = false;
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = 0;
+      }
       ws.close();
       if (wsRef.current === ws) {
         wsRef.current = null;

@@ -71,7 +71,7 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
         while True:
             try:
                 messages = await redis_pool.stream_read(
-                    stream_key, last_id=last_id, count=1, block=1000
+                    stream_key, last_id=last_id, count=5, block=1000
                 )
             except Exception as e:
                 logger.warning("Redis stream read error (video)", extra={"match_id": match_id, "error": str(e)})
@@ -81,15 +81,17 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
             if not messages:
                 continue
 
+            latest_frame = b""
             for stream_name, entries in messages:
                 for msg_id, data in entries:
                     last_id = msg_id
-                    frame_bytes = data.get(b"frame", b"")
-                    if frame_bytes:
-                        try:
-                            await websocket.send_bytes(frame_bytes)
-                        except Exception:
-                            return
+                    latest_frame = data.get(b"frame", b"")
+            # Only send the last frame from this batch
+            if latest_frame:
+                try:
+                    await websocket.send_bytes(latest_frame)
+                except Exception:
+                    return
     except WebSocketDisconnect:
         pass
     finally:
@@ -106,9 +108,9 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
 async def data_channel(websocket: WebSocket, match_id: str) -> None:
     """JSON WebSocket channel at 10Hz with all 16 fields per SDD Section 8.3.
 
-    Fields: match_id, timestamp, p1_health, p2_health, round, timer, status,
-    round_winner, match_winner, p1_team_health, p2_team_health,
-    p1_active_char, p2_active_char, odds_a, odds_b, pool_total.
+    Fields: match_id, timestamp, health_a, health_b, round, timer, status,
+    round_winner, match_winner, team_health_a, team_health_b,
+    active_char_a, active_char_b, odds_a, odds_b, pool_total.
 
     Connection limit: 5 concurrent per IP.
     """
@@ -185,21 +187,30 @@ def _build_data_message(match_id: str, raw_data: dict) -> dict:
     return {
         "match_id": match_id,
         "timestamp": _get("timestamp", ""),
-        "p1_health": _safe_float(_get("p1_health", 0)),
-        "p2_health": _safe_float(_get("p2_health", 0)),
+        "health_a": _safe_float(_get("p1_health", 0)) or 0,
+        "health_b": _safe_float(_get("p2_health", 0)) or 0,
         "round": _safe_int(_get("round_number", 0)),
         "timer": _safe_int(_get("timer", 0)),
         "status": _get("status", "live"),
-        "round_winner": _get("round_winner"),
-        "match_winner": _get("match_winner"),
-        "p1_team_health": _get("p1_team_health"),
-        "p2_team_health": _get("p2_team_health"),
-        "p1_active_char": _get("p1_active_character"),
-        "p2_active_char": _get("p2_active_character"),
-        "odds_a": _safe_float(_get("odds_a")),
-        "odds_b": _safe_float(_get("odds_b")),
-        "pool_total": _safe_float(_get("pool_total")),
+        "round_winner": _safe_int_or_none(_get("round_winner")),
+        "match_winner": _safe_int_or_none(_get("match_winner")),
+        "team_health_a": _get("p1_team_health"),
+        "team_health_b": _get("p2_team_health"),
+        "active_char_a": _get("p1_active_character"),
+        "active_char_b": _get("p2_active_character"),
+        "odds_a": _safe_float(_get("odds_a")) or 0,
+        "odds_b": _safe_float(_get("odds_b")) or 0,
+        "pool_total": _safe_float(_get("pool_total")) or 0,
     }
+
+
+def _safe_int_or_none(val) -> int | None:
+    if val is None or val == "" or val == "None":
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
 
 
 def _safe_float(val) -> float | None:
