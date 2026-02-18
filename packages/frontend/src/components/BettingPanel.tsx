@@ -73,12 +73,16 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
     const sig = await claimPayout(matchId, existingBet?.id);
     if (sig) {
       setTxSignature(sig);
+      // Optimistically update local state — tx succeeded on-chain
+      setExistingBet((prev) => prev ? { ...prev, status: "claimed" } : null);
+      // Sync with backend after a delay (RPC needs time to reflect PDA closure)
       if (existingBet && publicKey) {
-        try {
-          await syncBetStatus(existingBet.id, publicKey.toBase58());
-        } catch { /* non-critical */ }
+        const betId = existingBet.id;
+        const wallet = publicKey.toBase58();
+        setTimeout(async () => {
+          try { await syncBetStatus(betId, wallet); } catch { /* non-critical */ }
+        }, 3000);
       }
-      await refreshBet();
     }
   };
 
@@ -86,12 +90,16 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt }: BettingPa
     const sig = await refundBet(matchId, existingBet?.id);
     if (sig) {
       setTxSignature(sig);
+      // Optimistically update local state — tx succeeded on-chain
+      setExistingBet((prev) => prev ? { ...prev, status: "refunded" } : null);
+      // Sync with backend after a delay (RPC needs time to reflect PDA closure)
       if (existingBet && publicKey) {
-        try {
-          await syncBetStatus(existingBet.id, publicKey.toBase58());
-        } catch { /* non-critical */ }
+        const betId = existingBet.id;
+        const wallet = publicKey.toBase58();
+        setTimeout(async () => {
+          try { await syncBetStatus(betId, wallet); } catch { /* non-critical */ }
+        }, 3000);
       }
-      await refreshBet();
     }
   };
 

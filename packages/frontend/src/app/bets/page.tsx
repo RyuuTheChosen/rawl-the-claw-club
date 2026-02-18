@@ -63,7 +63,10 @@ function BetCard({
   const { publicKey } = useWallet();
   const { claimPayout, submitting: claiming } = useClaimPayout();
   const { refundBet, submitting: refunding } = useRefundBet();
-  const [syncing, setSyncing] = useState(false);
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
+
+  // Use local override if set (optimistic update), otherwise use prop
+  const effectiveStatus = localStatus ?? bet.status;
 
   const sideLabel = bet.side === "a" ? "P1" : "P2";
   const fighterName =
@@ -76,12 +79,16 @@ function BetCard({
     e.stopPropagation();
     const sig = await refundBet(bet.match_id, bet.id);
     if (sig) {
-      setSyncing(true);
-      try {
-        if (publicKey) await syncBetStatus(bet.id, publicKey.toBase58());
-      } catch { /* non-critical */ }
-      setSyncing(false);
-      onStatusChange();
+      // Optimistically update — tx succeeded on-chain
+      setLocalStatus("refunded");
+      // Sync with backend after delay (RPC propagation)
+      if (publicKey) {
+        const wallet = publicKey.toBase58();
+        setTimeout(async () => {
+          try { await syncBetStatus(bet.id, wallet); } catch { /* non-critical */ }
+          onStatusChange();
+        }, 3000);
+      }
     }
   };
 
@@ -90,63 +97,67 @@ function BetCard({
     e.stopPropagation();
     const sig = await claimPayout(bet.match_id, bet.id);
     if (sig) {
-      setSyncing(true);
-      try {
-        if (publicKey) await syncBetStatus(bet.id, publicKey.toBase58());
-      } catch { /* non-critical */ }
-      setSyncing(false);
-      onStatusChange();
+      // Optimistically update — tx succeeded on-chain
+      setLocalStatus("claimed");
+      // Sync with backend after delay (RPC propagation)
+      if (publicKey) {
+        const wallet = publicKey.toBase58();
+        setTimeout(async () => {
+          try { await syncBetStatus(bet.id, wallet); } catch { /* non-critical */ }
+          onStatusChange();
+        }, 3000);
+      }
     }
   };
 
   const renderAction = () => {
     // Already settled
-    if (bet.status === "refunded") {
+    if (effectiveStatus === "refunded") {
       return (
         <span className="font-pixel text-[8px] text-neon-green">REFUNDED</span>
       );
     }
-    if (bet.status === "claimed") {
+    if (effectiveStatus === "claimed") {
       return (
         <span className="font-pixel text-[8px] text-neon-green">CLAIMED</span>
       );
     }
-    if (bet.status === "expired") {
+    if (effectiveStatus === "expired") {
       return (
         <span className="font-pixel text-[8px] text-muted-foreground">EXPIRED</span>
       );
     }
 
     // Confirmed + cancelled → refund
-    if (bet.status === "confirmed" && bet.match_status === "cancelled") {
+    if (effectiveStatus === "confirmed" && bet.match_status === "cancelled") {
       return (
         <ArcadeButton
           size="sm"
           onClick={handleRefund}
-          disabled={refunding || syncing}
+          disabled={refunding}
           className="bg-neon-yellow text-background hover:bg-neon-yellow/90"
         >
-          {refunding ? "REFUNDING..." : syncing ? "SYNCING..." : "REFUND"}
+          {refunding ? "REFUNDING..." : "REFUND"}
         </ArcadeButton>
       );
     }
 
     // Confirmed + resolved → claim (user may have won)
-    if (bet.status === "confirmed" && bet.match_status === "resolved") {
+    if (effectiveStatus === "confirmed" && bet.match_status === "resolved") {
       return (
         <ArcadeButton
           size="sm"
           onClick={handleClaim}
-          disabled={claiming || syncing}
+          disabled={claiming}
           className="bg-neon-green text-background hover:bg-neon-green/90"
         >
-          {claiming ? "CLAIMING..." : syncing ? "SYNCING..." : "CLAIM PAYOUT"}
+          {claiming ? "CLAIMING..." : "CLAIM PAYOUT"}
         </ArcadeButton>
       );
     }
 
     // Active bet
-    if (bet.status === "confirmed" && (bet.match_status === "open" || bet.match_status === "locked")) {
+    if (effectiveStatus === "confirmed" && (bet.match_status === "open" || bet.match_status === "locked")) {
       return (
         <div className="flex items-center gap-1.5">
           <span className="h-2 w-2 animate-pulse rounded-full bg-neon-green" />
