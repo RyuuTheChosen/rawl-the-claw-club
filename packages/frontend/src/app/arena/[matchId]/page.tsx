@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Trophy } from "lucide-react";
 import { Match } from "@/types";
 import { getMatch } from "@/lib/api";
+import { cn, getWinnerInfo } from "@/lib/utils";
 import { MatchViewer } from "@/components/MatchViewer";
 import { BettingPanel } from "@/components/BettingPanel";
 import { useMatchDataStream } from "@/hooks/useMatchStream";
@@ -60,6 +62,7 @@ export default function ArenaPage() {
 
   const nameA = match.fighter_a_name ?? match.fighter_a_id.slice(0, 8);
   const nameB = match.fighter_b_name ?? match.fighter_b_id.slice(0, 8);
+  const winner = getWinnerInfo(match, data);
 
   return (
     <PageTransition>
@@ -87,14 +90,24 @@ export default function ArenaPage() {
 
         {/* Fighter names */}
         <div className="mb-3 flex items-center justify-between px-1">
-          <span className="font-mono text-sm text-neon-cyan">
+          <span className={cn("font-mono text-sm", winner?.side === "a" ? "text-neon-green" : "text-neon-cyan")}>
             {nameA}
           </span>
           <span className="font-pixel text-xs text-neon-orange">VS</span>
-          <span className="font-mono text-sm text-neon-pink">
+          <span className={cn("font-mono text-sm", winner?.side === "b" ? "text-neon-green" : "text-neon-pink")}>
             {nameB}
           </span>
         </div>
+
+        {/* Winner banner */}
+        {effectiveStatus === "resolved" && winner && (
+          <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-neon-green/30 bg-neon-green/10 py-3">
+            <Trophy className="h-4 w-4 text-neon-green" />
+            <span className="font-pixel text-xs text-neon-green text-glow-green">
+              WINNER: {winner.name}
+            </span>
+          </div>
+        )}
 
         {/* Pre-match countdown */}
         {effectiveStatus === "open" && match.starts_at && (
@@ -125,6 +138,14 @@ export default function ArenaPage() {
                   <dt className="text-muted-foreground">Status</dt>
                   <dd className="uppercase">{effectiveStatus}</dd>
                 </div>
+                {winner && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Winner</dt>
+                    <dd className={cn("font-mono", winner.side === "a" ? "text-neon-cyan" : "text-neon-pink")}>
+                      {winner.name}
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
           </div>

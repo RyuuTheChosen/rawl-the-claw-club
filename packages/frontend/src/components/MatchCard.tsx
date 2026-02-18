@@ -7,7 +7,7 @@ import { Match } from "@/types";
 import { StatusBadge } from "./StatusBadge";
 import { LivePulse } from "./LivePulse";
 import { Countdown } from "./Countdown";
-import { cn } from "@/lib/utils";
+import { cn, getWinnerInfo } from "@/lib/utils";
 
 interface MatchCardProps {
   match: Match;
@@ -16,6 +16,7 @@ interface MatchCardProps {
 export function MatchCard({ match }: MatchCardProps) {
   const isLive = match.status === "locked";
   const poolTotal = (match.side_a_total + match.side_b_total) / 1e9;
+  const winner = getWinnerInfo(match);
   const [countdownDone, setCountdownDone] = useState(false);
 
   // Reset countdown state when match changes
@@ -43,11 +44,17 @@ export function MatchCard({ match }: MatchCardProps) {
 
         {/* VS layout */}
         <div className="mb-3 flex items-center justify-between">
-          <span className="font-mono text-sm text-neon-cyan">
+          <span className={cn(
+            "font-mono text-sm",
+            winner?.side === "a" ? "text-neon-green" : winner?.side === "b" ? "text-neon-cyan/50" : "text-neon-cyan"
+          )}>
             {match.fighter_a_name ?? match.fighter_a_id.slice(0, 8)}
           </span>
           <span className="font-pixel text-[10px] text-neon-orange">VS</span>
-          <span className="font-mono text-sm text-neon-pink">
+          <span className={cn(
+            "font-mono text-sm",
+            winner?.side === "b" ? "text-neon-green" : winner?.side === "a" ? "text-neon-pink/50" : "text-neon-pink"
+          )}>
             {match.fighter_b_name ?? match.fighter_b_id.slice(0, 8)}
           </span>
         </div>
@@ -67,9 +74,21 @@ export function MatchCard({ match }: MatchCardProps) {
           </div>
         )}
 
+        {/* Winner banner for resolved matches */}
+        {match.status === "resolved" && winner && (
+          <div className="mb-2 rounded bg-neon-green/10 py-1.5 text-center">
+            <span className="font-pixel text-[7px] text-neon-green">
+              WINNER: {winner.name}
+            </span>
+          </div>
+        )}
+
         {/* Bottom info */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="font-pixel text-[8px]">Bo{match.match_format}</span>
+          <span className="font-mono text-[10px] text-muted-foreground/60">
+            {match.id.slice(0, 8)}
+          </span>
           <span className="text-[10px] uppercase">{match.match_type}</span>
           {match.has_pool && poolTotal >= 0.01 && (
             <span className="font-mono text-neon-orange">
