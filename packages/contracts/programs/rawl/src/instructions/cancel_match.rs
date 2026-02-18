@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::MatchCancelled;
 use crate::state::{MatchPool, MatchStatus, PlatformConfig};
 
 #[derive(Accounts)]
@@ -36,6 +37,10 @@ pub fn handler(ctx: Context<CancelMatch>, _match_id: [u8; 32]) -> Result<()> {
 
     pool.status = MatchStatus::Cancelled;
     pool.cancel_timestamp = Clock::get()?.unix_timestamp;
+
+    emit!(MatchCancelled {
+        match_id: pool.match_id,
+    });
 
     Ok(())
 }

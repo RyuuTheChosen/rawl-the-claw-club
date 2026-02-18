@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::MatchCancelled;
 use crate::state::{MatchPool, MatchStatus, PlatformConfig};
 
 /// Permissionless — anyone can call this after 30-minute timeout
@@ -36,6 +37,10 @@ pub fn handler(ctx: Context<TimeoutMatch>, _match_id: [u8; 32]) -> Result<()> {
 
     pool.status = MatchStatus::Cancelled;
     pool.cancel_timestamp = now;
+
+    emit!(MatchCancelled {
+        match_id: pool.match_id,
+    });
 
     Ok(())
 }

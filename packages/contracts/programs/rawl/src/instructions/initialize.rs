@@ -29,6 +29,7 @@ pub struct Initialize<'info> {
 
 pub fn handler(ctx: Context<Initialize>, fee_bps: u16, match_timeout: i64) -> Result<()> {
     require!(fee_bps <= MAX_FEE_BPS, RawlError::InvalidFeeBps);
+    require!(match_timeout > 0, RawlError::InvalidTimeout);
 
     let config = &mut ctx.accounts.platform_config;
     config.authority = ctx.accounts.authority.key();

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
-use crate::state::{MatchPool, PlatformConfig};
+use crate::state::{MatchPool, MatchStatus, PlatformConfig};
 
 /// Close MatchPool + Vault PDAs when bet_count == 0
 #[derive(Accounts)]
@@ -41,6 +41,10 @@ pub struct CloseMatch<'info> {
 
 pub fn handler(ctx: Context<CloseMatch>, _match_id: [u8; 32]) -> Result<()> {
     let pool = &ctx.accounts.match_pool;
+    require!(
+        pool.status == MatchStatus::Resolved || pool.status == MatchStatus::Cancelled,
+        RawlError::InvalidMatchStatus
+    );
     require!(pool.bet_count == 0, RawlError::BetCountNotZero);
 
     // Transfer any remaining vault lamports to authority

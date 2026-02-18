@@ -13,6 +13,7 @@ pub mod withdraw_fees;
 pub mod sweep_unclaimed;
 pub mod sweep_cancelled;
 pub mod update_authority;
+pub mod update_config;
 
 pub use initialize::*;
 pub use create_match::*;
@@ -29,3 +30,4 @@ pub use withdraw_fees::*;
 pub use sweep_unclaimed::*;
 pub use sweep_cancelled::*;
 pub use update_authority::*;
+pub use update_config::*;

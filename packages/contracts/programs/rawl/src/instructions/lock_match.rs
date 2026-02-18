@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::MatchLocked;
 use crate::state::{MatchPool, MatchStatus};
 
 #[derive(Accounts)]
@@ -26,6 +27,10 @@ pub fn handler(ctx: Context<LockMatch>, _match_id: [u8; 32]) -> Result<()> {
 
     pool.status = MatchStatus::Locked;
     pool.lock_timestamp = Clock::get()?.unix_timestamp;
+
+    emit!(MatchLocked {
+        match_id: pool.match_id,
+    });
 
     Ok(())
 }

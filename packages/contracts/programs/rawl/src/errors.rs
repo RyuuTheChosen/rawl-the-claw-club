@@ -38,12 +38,6 @@ pub enum RawlError {
     #[msg("Claim window has not elapsed")]
     ClaimWindowNotElapsed,
 
-    #[msg("Outstanding bets remain")]
-    OutstandingBets,
-
-    #[msg("Outstanding winning bets remain")]
-    OutstandingWinningBets,
-
     #[msg("Arithmetic overflow")]
     Overflow,
 
@@ -67,4 +61,16 @@ pub enum RawlError {
 
     #[msg("Betting window has closed")]
     BettingWindowClosed,
+
+    #[msg("Fees have already been withdrawn for this match")]
+    FeesAlreadyWithdrawn,
+
+    #[msg("Vault has insufficient balance for this operation")]
+    InsufficientVault,
+
+    #[msg("Match timeout must be positive")]
+    InvalidTimeout,
+
+    #[msg("Betting window must not be negative")]
+    InvalidBettingWindow,
 }

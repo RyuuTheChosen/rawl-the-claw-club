@@ -5,6 +5,9 @@ skip-lint = false
 [programs.localnet]
 rawl = "AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K"
 
+[programs.devnet]
+rawl = "AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K"
+
 [registry]
 url = "https://api.apr.dev"
 

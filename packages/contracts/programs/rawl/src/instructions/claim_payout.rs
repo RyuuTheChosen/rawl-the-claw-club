@@ -2,7 +2,8 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
-use crate::state::{Bet, MatchPool, MatchStatus, PlatformConfig};
+use crate::events::PayoutClaimed;
+use crate::state::{Bet, MatchPool, MatchStatus};
 
 #[derive(Accounts)]
 #[instruction(match_id: [u8; 32])]
@@ -30,12 +31,6 @@ pub struct ClaimPayout<'info> {
     )]
     pub vault: UncheckedAccount<'info>,
 
-    #[account(
-        seeds = [PLATFORM_CONFIG_SEED],
-        bump = platform_config.bump,
-    )]
-    pub platform_config: Account<'info, PlatformConfig>,
-
     #[account(mut)]
     pub bettor: Signer<'info>,
 
@@ -50,13 +45,13 @@ pub fn handler(ctx: Context<ClaimPayout>, match_id: [u8; 32]) -> Result<()> {
     require!(!bet.claimed, RawlError::AlreadyClaimed);
     require!(bet.is_winner(pool.winner), RawlError::BetOnLosingSide);
 
-    // Calculate payout with u128 intermediate math
+    // Calculate payout with u128 intermediate math using snapshotted fee_bps
     let total_pool = (pool.side_a_total as u128)
         .checked_add(pool.side_b_total as u128)
         .ok_or(RawlError::Overflow)?;
 
     let fee = total_pool
-        .checked_mul(ctx.accounts.platform_config.fee_bps as u128)
+        .checked_mul(pool.fee_bps as u128)
         .ok_or(RawlError::Overflow)?
         .checked_div(10_000)
         .ok_or(RawlError::Overflow)?;
@@ -69,14 +64,19 @@ pub fn handler(ctx: Context<ClaimPayout>, match_id: [u8; 32]) -> Result<()> {
         _ => return Err(RawlError::InvalidMatchStatus.into()),
     };
 
-    let payout = net_pool
-        .checked_mul(bet.amount as u128)
-        .ok_or(RawlError::Overflow)?
-        .checked_div(winning_side_total)
-        .ok_or(RawlError::Overflow)? as u64;
+    let payout = u64::try_from(
+        net_pool
+            .checked_mul(bet.amount as u128)
+            .ok_or(RawlError::Overflow)?
+            .checked_div(winning_side_total)
+            .ok_or(RawlError::Overflow)?
+    ).map_err(|_| RawlError::Overflow)?;
+
+    // Vault balance check
+    let vault_info = ctx.accounts.vault.to_account_info();
+    require!(vault_info.lamports() >= payout, RawlError::InsufficientVault);
 
     // Transfer from vault to bettor
-    let vault_info = ctx.accounts.vault.to_account_info();
     let bettor_info = ctx.accounts.bettor.to_account_info();
     **vault_info.try_borrow_mut_lamports()? -= payout;
     **bettor_info.try_borrow_mut_lamports()? += payout;
@@ -86,6 +86,12 @@ pub fn handler(ctx: Context<ClaimPayout>, match_id: [u8; 32]) -> Result<()> {
     // Decrement winning_bet_count
     let pool = &mut ctx.accounts.match_pool;
     pool.winning_bet_count = pool.winning_bet_count.saturating_sub(1);
+
+    emit!(PayoutClaimed {
+        match_id,
+        bettor: ctx.accounts.bettor.key(),
+        amount: payout,
+    });
 
     Ok(())
 }

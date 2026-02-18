@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::FeesWithdrawn;
 use crate::state::{MatchPool, MatchStatus, PlatformConfig};
 
 /// Withdraw platform fees after 30-day claim window + winning_bet_count == 0
@@ -9,6 +10,7 @@ use crate::state::{MatchPool, MatchStatus, PlatformConfig};
 #[instruction(match_id: [u8; 32])]
 pub struct WithdrawFees<'info> {
     #[account(
+        mut,
         seeds = [MATCH_POOL_SEED, &match_id],
         bump = match_pool.bump,
     )]
@@ -44,10 +46,10 @@ pub struct WithdrawFees<'info> {
 }
 
 pub fn handler(ctx: Context<WithdrawFees>, _match_id: [u8; 32]) -> Result<()> {
-    let pool = &ctx.accounts.match_pool;
-    let config = &ctx.accounts.platform_config;
+    let pool = &mut ctx.accounts.match_pool;
 
     require!(pool.status == MatchStatus::Resolved, RawlError::MatchNotResolved);
+    require!(!pool.fees_withdrawn, RawlError::FeesAlreadyWithdrawn);
     require!(pool.winning_bet_count == 0, RawlError::WinningBetCountNotZero);
 
     // Time gate: 30-day claim window must have elapsed
@@ -55,16 +57,18 @@ pub fn handler(ctx: Context<WithdrawFees>, _match_id: [u8; 32]) -> Result<()> {
     let elapsed = now.saturating_sub(pool.resolve_timestamp);
     require!(elapsed >= CLAIM_WINDOW_SECONDS, RawlError::ClaimWindowNotElapsed);
 
-    // Calculate fee amount
+    // Calculate fee amount using snapshotted fee_bps
     let total_pool = (pool.side_a_total as u128)
         .checked_add(pool.side_b_total as u128)
         .ok_or(RawlError::Overflow)?;
 
-    let fee = total_pool
-        .checked_mul(config.fee_bps as u128)
-        .ok_or(RawlError::Overflow)?
-        .checked_div(10_000)
-        .ok_or(RawlError::Overflow)? as u64;
+    let fee = u64::try_from(
+        total_pool
+            .checked_mul(pool.fee_bps as u128)
+            .ok_or(RawlError::Overflow)?
+            .checked_div(10_000)
+            .ok_or(RawlError::Overflow)?
+    ).map_err(|_| RawlError::Overflow)?;
 
     // Transfer fee from vault to treasury
     let vault_info = ctx.accounts.vault.to_account_info();
@@ -77,6 +81,13 @@ pub fn handler(ctx: Context<WithdrawFees>, _match_id: [u8; 32]) -> Result<()> {
         **vault_info.try_borrow_mut_lamports()? -= transfer_amount;
         **treasury_info.try_borrow_mut_lamports()? += transfer_amount;
     }
+
+    pool.fees_withdrawn = true;
+
+    emit!(FeesWithdrawn {
+        match_id: pool.match_id,
+        amount: transfer_amount,
+    });
 
     Ok(())
 }

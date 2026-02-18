@@ -2,12 +2,26 @@ use anchor_lang::prelude::*;
 
 pub mod constants;
 pub mod errors;
+pub mod events;
 pub mod instructions;
 pub mod state;
 
 use instructions::*;
 
 declare_id!("AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K");
+
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "Rawl",
+    project_url: "https://rawl.gg",
+    contacts: "email:security@rawl.gg",
+    policy: "https://rawl.gg/security",
+    source_code: "https://github.com/rawl-gg/rawl",
+    auditors: "N/A"
+}
 
 #[program]
 pub mod rawl {
@@ -22,8 +36,10 @@ pub mod rawl {
         match_id: [u8; 32],
         fighter_a: Pubkey,
         fighter_b: Pubkey,
+        min_bet: u64,
+        betting_window: i64,
     ) -> Result<()> {
-        instructions::create_match::handler(ctx, match_id, fighter_a, fighter_b)
+        instructions::create_match::handler(ctx, match_id, fighter_a, fighter_b, min_bet, betting_window)
     }
 
     pub fn place_bet(
@@ -85,5 +101,16 @@ pub mod rawl {
 
     pub fn update_authority(ctx: Context<UpdateAuthority>) -> Result<()> {
         instructions::update_authority::handler(ctx)
+    }
+
+    pub fn update_config(
+        ctx: Context<UpdateConfig>,
+        fee_bps: Option<u16>,
+        match_timeout: Option<i64>,
+        paused: Option<bool>,
+        oracle: Option<Pubkey>,
+        treasury: Option<Pubkey>,
+    ) -> Result<()> {
+        instructions::update_config::handler(ctx, fee_bps, match_timeout, paused, oracle, treasury)
     }
 }

@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::BetRefunded;
 use crate::state::{Bet, MatchPool, MatchStatus};
 
 /// Atomic refund + PDA close (single tx) for cancelled matches
@@ -44,11 +45,20 @@ pub fn handler(ctx: Context<RefundBet>, _match_id: [u8; 32]) -> Result<()> {
 
     require!(pool.status == MatchStatus::Cancelled, RawlError::MatchNotCancelled);
 
-    // Transfer wager back from vault to bettor
+    // Vault balance check
     let vault_info = ctx.accounts.vault.to_account_info();
+    require!(vault_info.lamports() >= bet.amount, RawlError::InsufficientVault);
+
+    // Transfer wager back from vault to bettor
     let bettor_info = ctx.accounts.bettor.to_account_info();
     **vault_info.try_borrow_mut_lamports()? -= bet.amount;
     **bettor_info.try_borrow_mut_lamports()? += bet.amount;
+
+    emit!(BetRefunded {
+        match_id: pool.match_id,
+        bettor: ctx.accounts.bettor.key(),
+        amount: bet.amount,
+    });
 
     // Decrement bet_count (PDA close handled by anchor `close` attribute)
     pool.bet_count = pool.bet_count.saturating_sub(1);

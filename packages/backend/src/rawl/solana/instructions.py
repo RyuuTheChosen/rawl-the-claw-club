@@ -1,4 +1,4 @@
-"""Build Solana instructions for all 14 Rawl contract instructions.
+"""Build Solana instructions for all 16 Rawl contract instructions.
 
 Each builder produces a `solders.instruction.Instruction` with:
   - Anchor discriminator: SHA256("global:<name>")[:8]
@@ -59,6 +59,8 @@ def build_create_match_ix(
     fighter_a: Pubkey,
     fighter_b: Pubkey,
     creator: Pubkey,
+    min_bet: int = 0,
+    betting_window: int = 0,
 ) -> Instruction:
     mid_bytes = match_id_to_bytes(match_id)
     match_pool_pda, _ = derive_match_pool_pda(match_id)
@@ -70,6 +72,7 @@ def build_create_match_ix(
         + mid_bytes
         + bytes(fighter_a)
         + bytes(fighter_b)
+        + struct.pack("<Qq", min_bet, betting_window)
     )
     accounts = [
         AccountMeta(match_pool_pda, is_signer=False, is_writable=True),
@@ -138,14 +141,12 @@ def build_claim_payout_ix(match_id: str, bettor: Pubkey) -> Instruction:
     match_pool_pda, _ = derive_match_pool_pda(match_id)
     bet_pda, _ = derive_bet_pda(match_id, bettor)
     vault_pda, _ = derive_vault_pda(match_id)
-    platform_config_pda, _ = derive_platform_config_pda()
 
     data = _discriminator("claim_payout") + mid_bytes
     accounts = [
         AccountMeta(match_pool_pda, is_signer=False, is_writable=True),
         AccountMeta(bet_pda, is_signer=False, is_writable=True),
         AccountMeta(vault_pda, is_signer=False, is_writable=True),
-        AccountMeta(platform_config_pda, is_signer=False, is_writable=False),
         AccountMeta(bettor, is_signer=True, is_writable=True),
         AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
     ]
@@ -245,7 +246,7 @@ def build_withdraw_fees_ix(
 
     data = _discriminator("withdraw_fees") + mid_bytes
     accounts = [
-        AccountMeta(match_pool_pda, is_signer=False, is_writable=False),
+        AccountMeta(match_pool_pda, is_signer=False, is_writable=True),
         AccountMeta(vault_pda, is_signer=False, is_writable=True),
         AccountMeta(platform_config_pda, is_signer=False, is_writable=False),
         AccountMeta(treasury, is_signer=False, is_writable=True),
@@ -316,6 +317,6 @@ def build_update_authority_ix(
     accounts = [
         AccountMeta(platform_config_pda, is_signer=False, is_writable=True),
         AccountMeta(current_authority, is_signer=True, is_writable=False),
-        AccountMeta(new_authority, is_signer=False, is_writable=False),
+        AccountMeta(new_authority, is_signer=True, is_writable=False),
     ]
     return Instruction(_program_id(), data, accounts)

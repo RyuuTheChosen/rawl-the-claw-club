@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::errors::RawlError;
 use crate::state::PlatformConfig;
 
-/// Key rotation for platform authority
+/// Key rotation for platform authority — requires both current and new authority signatures
 #[derive(Accounts)]
 pub struct UpdateAuthority<'info> {
     #[account(
@@ -19,8 +19,7 @@ pub struct UpdateAuthority<'info> {
     )]
     pub current_authority: Signer<'info>,
 
-    /// CHECK: New authority pubkey
-    pub new_authority: UncheckedAccount<'info>,
+    pub new_authority: Signer<'info>,
 }
 
 pub fn handler(ctx: Context<UpdateAuthority>) -> Result<()> {

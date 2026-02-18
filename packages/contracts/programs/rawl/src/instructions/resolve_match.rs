@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::MatchResolved;
 use crate::state::{MatchPool, MatchStatus, MatchWinner};
 
 #[derive(Accounts)]
@@ -40,6 +41,11 @@ pub fn handler(ctx: Context<ResolveMatch>, _match_id: [u8; 32], winner: u8) -> R
         MatchWinner::SideB => pool.side_b_bet_count,
         MatchWinner::None => 0,
     };
+
+    emit!(MatchResolved {
+        match_id: pool.match_id,
+        winner,
+    });
 
     Ok(())
 }

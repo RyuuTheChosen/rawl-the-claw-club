@@ -3,6 +3,7 @@ use anchor_lang::system_program;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::BetPlaced;
 use crate::state::{Bet, BetSide, MatchPool, MatchStatus};
 
 #[derive(Accounts)]
@@ -101,6 +102,13 @@ pub fn handler(ctx: Context<PlaceBet>, match_id: [u8; 32], side: u8, amount: u64
     bet.amount = amount;
     bet.claimed = false;
     bet.bump = ctx.bumps.bet;
+
+    emit!(BetPlaced {
+        match_id,
+        bettor: ctx.accounts.bettor.key(),
+        side,
+        amount,
+    });
 
     Ok(())
 }

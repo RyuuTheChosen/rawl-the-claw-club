@@ -51,6 +51,8 @@ pub struct MatchPool {
     pub betting_window: i64,
     pub bump: u8,
     pub vault_bump: u8,
+    pub fees_withdrawn: bool,
+    pub fee_bps: u16,
 }
 
 impl MatchPool {
@@ -75,5 +77,7 @@ impl MatchPool {
         + 8    // min_bet
         + 8    // betting_window
         + 1    // bump
-        + 1;   // vault_bump
+        + 1    // vault_bump
+        + 1    // fees_withdrawn
+        + 2;   // fee_bps
 }

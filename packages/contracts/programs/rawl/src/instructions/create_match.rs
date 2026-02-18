@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::RawlError;
+use crate::events::MatchCreated;
 use crate::state::{MatchPool, MatchStatus, PlatformConfig};
 
 #[derive(Accounts)]
@@ -41,8 +42,11 @@ pub fn handler(
     match_id: [u8; 32],
     fighter_a: Pubkey,
     fighter_b: Pubkey,
+    min_bet: u64,
+    betting_window: i64,
 ) -> Result<()> {
     require!(!ctx.accounts.platform_config.paused, RawlError::PlatformPaused);
+    require!(betting_window >= 0, RawlError::InvalidBettingWindow);
 
     // Create the vault PDA as a program-owned account so that
     // claim_payout/refund/withdraw can directly manipulate lamports.
@@ -83,8 +87,18 @@ pub fn handler(
     pool.lock_timestamp = 0;
     pool.resolve_timestamp = 0;
     pool.cancel_timestamp = 0;
+    pool.min_bet = min_bet;
+    pool.betting_window = betting_window;
     pool.bump = ctx.bumps.match_pool;
     pool.vault_bump = vault_bump;
+    pool.fees_withdrawn = false;
+    pool.fee_bps = ctx.accounts.platform_config.fee_bps;
+
+    emit!(MatchCreated {
+        match_id,
+        fighter_a,
+        fighter_b,
+    });
 
     Ok(())
 }

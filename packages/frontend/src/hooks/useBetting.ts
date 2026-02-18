@@ -8,7 +8,6 @@ import {
   deriveMatchPoolPda,
   deriveBetPda,
   deriveVaultPda,
-  derivePlatformConfigPda,
   buildPlaceBetData,
   buildClaimPayoutData,
   buildRefundBetData,
@@ -133,18 +132,16 @@ export function useClaimPayout() {
         const matchPoolPda = await deriveMatchPoolPda(matchId);
         const betPda = await deriveBetPda(matchId, publicKey.toBase58());
         const vaultPda = await deriveVaultPda(matchId);
-        const platformConfigPda = await derivePlatformConfigPda();
 
         const data = await buildClaimPayoutData(matchId);
 
-        // Accounts match claim_payout.rs
+        // Accounts match claim_payout.rs (fee_bps now read from pool, not platform_config)
         const instruction = new TransactionInstruction({
           programId,
           keys: [
             { pubkey: matchPoolPda, isSigner: false, isWritable: true },
             { pubkey: betPda, isSigner: false, isWritable: true },
             { pubkey: vaultPda, isSigner: false, isWritable: true },
-            { pubkey: platformConfigPda, isSigner: false, isWritable: false },
             { pubkey: publicKey, isSigner: true, isWritable: true },
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
           ],
