@@ -49,6 +49,7 @@ Thumbs.db
 # Markdown docs (keep docs/ and README, ignore stray .md in root)
 *.md
 !README.md
+!CLAUDE.md
 !docs/
 !docs/**/*.md
 
