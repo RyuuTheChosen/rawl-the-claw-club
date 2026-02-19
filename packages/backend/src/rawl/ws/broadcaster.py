@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import struct
 import uuid as _uuid
 from collections import defaultdict
 
@@ -24,6 +25,17 @@ _video_connections: dict[str, set[WebSocket]] = defaultdict(set)
 _data_connections: dict[str, set[WebSocket]] = defaultdict(set)
 _ip_video_count: dict[str, int] = defaultdict(int)
 _ip_data_count: dict[str, int] = defaultdict(int)
+
+# Binary WS protocol: header = type(1) + timestamp_us(8 BE) + seq(4 BE) = 13 bytes
+TYPE_SEQ_HEADER = 0x01
+TYPE_KEYFRAME = 0x02
+TYPE_DELTA = 0x03
+TYPE_EOS = 0x04
+HEADER_SIZE = 13
+
+# Backpressure: disconnect if > 80% frames dropped in this window
+_BACKPRESSURE_WINDOW = 60
+_BACKPRESSURE_DROP_THRESHOLD = 0.80
 
 
 def _get_client_ip(websocket: WebSocket) -> str:
@@ -47,11 +59,54 @@ async def _watch_disconnect(websocket: WebSocket, event: asyncio.Event) -> None:
     event.set()
 
 
+def _build_ws_frame(
+    frame_type: int, timestamp_us: int, seq: int, nal_data: bytes = b""
+) -> bytes:
+    """Build binary WebSocket frame: type(1) + timestamp(8 BE) + seq(4 BE) + NAL data."""
+    header = struct.pack(">BQI", frame_type, timestamp_us, seq)
+    return header + nal_data
+
+
+def _nal_type_to_ws_type(nal_type: bytes) -> int:
+    """Map Redis NAL type tag to WS protocol type byte."""
+    if nal_type == b"seq":
+        return TYPE_SEQ_HEADER
+    elif nal_type == b"key":
+        return TYPE_KEYFRAME
+    elif nal_type == b"delta":
+        return TYPE_DELTA
+    elif nal_type == b"eos":
+        return TYPE_EOS
+    return TYPE_DELTA
+
+
+async def _find_latest_keyframe_id(stream_key: str) -> str | None:
+    """Find the stream ID of the most recent keyframe using XREVRANGE.
+
+    Returns the stream ID to start reading from, or None if no keyframe found.
+    """
+    try:
+        entries = await redis_pool.stream_revrange(stream_key, count=60)
+        for msg_id, data in entries:
+            nal_type = data.get(b"type", b"")
+            if nal_type in (b"key", b"seq"):
+                return msg_id.decode() if isinstance(msg_id, bytes) else msg_id
+    except Exception as e:
+        logger.debug("Failed to find latest keyframe", extra={"error": str(e)})
+    return None
+
+
 @ws_router.websocket("/match/{match_id}/video")
 async def video_channel(websocket: WebSocket, match_id: str) -> None:
-    """Binary WebSocket channel streaming JPEG frames at 60fps.
+    """Binary WebSocket channel streaming H.264 NAL units.
 
-    Each message = raw JPEG bytes (10-30 KB at 256x256), no JSON wrapper.
+    Protocol (per message):
+      Byte 0:    type (0x01=seq, 0x02=keyframe, 0x03=delta, 0x04=EOS)
+      Bytes 1-8: timestamp microseconds (uint64 BE)
+      Bytes 9-12: sequence number (uint32 BE)
+      Bytes 13+: H.264 NAL unit data (Annex B format)
+
+    Late joiners receive SPS+PPS + latest keyframe on connect.
     Connection limit: 2 concurrent per IP.
     """
     try:
@@ -80,34 +135,119 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
     watcher = asyncio.create_task(_watch_disconnect(websocket, disconnected))
 
     stream_key = f"match:{match_id}:video"
-    last_id = "$"  # Only new messages
+    sps_pps_key = f"match:{match_id}:sps_pps"
+
+    # Late joiner: send SPS+PPS first, then seek to latest keyframe
+    last_id = "$"
+    try:
+        # Send cached SPS+PPS if available
+        sps_pps = await redis_pool.get(sps_pps_key)
+        if sps_pps:
+            frame = _build_ws_frame(TYPE_SEQ_HEADER, 0, 0, sps_pps)
+            await websocket.send_bytes(frame)
+
+        # Find latest keyframe to start from
+        keyframe_id = await _find_latest_keyframe_id(stream_key)
+        if keyframe_id:
+            # Read from just before the keyframe (the keyframe entry itself)
+            # XREAD uses exclusive lower bound, so decrement the ID
+            parts = keyframe_id.split("-")
+            if len(parts) == 2:
+                ts_part, seq_part = parts
+                if int(seq_part) > 0:
+                    last_id = f"{ts_part}-{int(seq_part) - 1}"
+                else:
+                    last_id = f"{int(ts_part) - 1}-99999"
+    except Exception as e:
+        logger.debug("Late joiner setup failed, starting from live", extra={"error": str(e)})
+
+    # Backpressure tracking
+    sent_count = 0
+    dropped_count = 0
 
     try:
         while not disconnected.is_set():
             try:
-                # Read a large batch to skip intermediate frames and catch up
                 messages = await redis_pool.stream_read(
                     stream_key, last_id=last_id, count=10, block=16
                 )
             except Exception as e:
-                logger.warning("Redis stream read error (video)", extra={"match_id": match_id, "error": str(e)})
+                logger.warning(
+                    "Redis stream read error (video)",
+                    extra={"match_id": match_id, "error": str(e)},
+                )
                 await asyncio.sleep(0.1)
                 continue
 
             if not messages:
                 continue
 
-            latest_frame = b""
-            for stream_name, entries in messages:
+            # Collect all entries from this batch
+            entries_to_send: list[tuple[str, dict]] = []
+            for _stream_name, entries in messages:
                 for msg_id, data in entries:
                     last_id = msg_id
-                    latest_frame = data.get(b"frame", b"")
-            # Only send the last (most recent) frame from this batch
-            if latest_frame:
+                    entries_to_send.append((msg_id, data))
+
+            if not entries_to_send:
+                continue
+
+            # Keyframe-aware skip: when behind, keep latest keyframe + all deltas after it
+            if len(entries_to_send) > 3:
+                last_keyframe_idx = -1
+                for i, (_mid, d) in enumerate(entries_to_send):
+                    if d.get(b"type") in (b"key", b"seq", b"eos"):
+                        last_keyframe_idx = i
+                if last_keyframe_idx > 0:
+                    entries_to_send = entries_to_send[last_keyframe_idx:]
+
+            for _msg_id, data in entries_to_send:
+                nal_type = data.get(b"type", b"delta")
+
+                # EOS sentinel
+                if nal_type == b"eos":
+                    eos_frame = _build_ws_frame(TYPE_EOS, 0, 0)
+                    try:
+                        await websocket.send_bytes(eos_frame)
+                    except Exception:
+                        pass
+                    await websocket.close(code=1000, reason="Stream ended")
+                    return
+
+                nal_data = data.get(b"nal", b"")
+                if not nal_data:
+                    continue
+
+                ts = int(data.get(b"ts", b"0"))
+                seq = int(data.get(b"seq", b"0"))
+                ws_type = _nal_type_to_ws_type(nal_type)
+                frame = _build_ws_frame(ws_type, ts, seq, nal_data)
+
                 try:
-                    await websocket.send_bytes(latest_frame)
+                    await asyncio.wait_for(websocket.send_bytes(frame), timeout=0.05)
+                    sent_count += 1
+                except asyncio.TimeoutError:
+                    dropped_count += 1
+                    # Check backpressure: too many drops → disconnect
+                    total = sent_count + dropped_count
+                    if total >= _BACKPRESSURE_WINDOW:
+                        drop_rate = dropped_count / total
+                        if drop_rate > _BACKPRESSURE_DROP_THRESHOLD:
+                            logger.warning(
+                                "Client too slow, disconnecting",
+                                extra={
+                                    "match_id": match_id,
+                                    "drop_rate": f"{drop_rate:.0%}",
+                                },
+                            )
+                            await websocket.close(code=4008, reason="Client too slow")
+                            return
+                        # Reset counters for next window
+                        sent_count = 0
+                        dropped_count = 0
                 except Exception:
                     return
+
     except WebSocketDisconnect:
         pass
     finally:

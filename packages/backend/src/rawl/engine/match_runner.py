@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections import deque
@@ -12,11 +13,13 @@ from rawl.config import settings
 from rawl.engine.emulation.retro_engine import RetroEngine
 from rawl.engine.field_validator import FieldValidator
 from rawl.engine.frame_processor import encode_mjpeg_frame, preprocess_for_inference
+from rawl.engine.h264_encoder import H264Encoder, H264EncoderError
 from rawl.engine.match_result import MatchResult, compute_match_hash, resolve_tiebreaker
 from rawl.engine.model_loader import load_fighter_model
 from rawl.engine.oracle_client import oracle_client
 from rawl.engine.replay_recorder import ReplayRecorder
 from rawl.game_adapters import get_adapter
+from rawl.game_adapters.base import GameAdapter, MatchState
 from rawl.game_adapters.errors import AdapterValidationError
 from rawl.monitoring.metrics import match_duration_seconds, matches_active, matches_total
 from rawl.redis_client import redis_pool
@@ -102,6 +105,22 @@ async def run_match(
             last_heartbeat = time.monotonic()
         match_locked = True
         lock_time = datetime.now(UTC)
+
+        # Start live H.264 encoder (if enabled and not calibrating)
+        encoder: H264Encoder | None = None
+        if not calibration and settings.live_streaming_enabled:
+            try:
+                encoder = H264Encoder(
+                    match_id, settings.live_stream_width, settings.live_stream_height
+                )
+                await encoder.start()
+                logger.info("Live H.264 encoder started", extra={"match_id": match_id})
+            except H264EncoderError:
+                logger.warning(
+                    "Live streaming unavailable, continuing with replay-only",
+                    extra={"match_id": match_id},
+                )
+                encoder = None
 
         # Detect model observation space to adapt preprocessing
         obs_shape_a = model_a.observation_space.shape
@@ -199,12 +218,28 @@ async def run_match(
                         )
 
                 if not calibration:
-                    # Record replay only — no Redis publish, run at max speed
-                    frame_jpeg = encode_mjpeg_frame(obs["P1"])
+                    raw_frame = obs["P1"]
+
+                    # Feed to live encoder (if active)
+                    if encoder and encoder.is_running:
+                        try:
+                            await encoder.feed_frame(raw_frame)
+                        except (H264EncoderError, ValueError):
+                            logger.warning(
+                                "Encoder feed failed, disabling live stream",
+                                extra={"match_id": match_id},
+                            )
+                            encoder = None  # Continue with replay-only
+
+                    # Record MJPEG for post-match replay (always)
+                    frame_jpeg = encode_mjpeg_frame(raw_frame)
                     state_dict = None
                     if frame_count % DATA_RECORD_INTERVAL == 0:
                         state_dict = asdict(state)
                         state_dict["has_round_timer"] = adapter.has_round_timer
+                        # Publish to live data stream
+                        if encoder and encoder.is_running:
+                            await _publish_live_data(match_id, state, adapter, frame_count)
                     recorder.write_frame(frame_jpeg, state_dict)
 
                 # Check round over (every step — don't miss transitions)
@@ -260,9 +295,37 @@ async def run_match(
                             "rounds": len(round_history),
                         },
                     )
-            # No sleep — run at max speed
+            # Real-time pacing when live streaming (drift-corrected 60fps)
+            if encoder and encoder.is_running:
+                target_time = start_time + (frame_count / settings.streaming_fps)
+                sleep_time = target_time - time.monotonic()
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                elif sleep_time < -0.1:
+                    logger.warning(
+                        "Match loop behind schedule",
+                        extra={
+                            "match_id": match_id,
+                            "behind_ms": int(-sleep_time * 1000),
+                        },
+                    )
+            # When encoder is None/stopped, runs at max speed (same as before)
 
-        # Step 5: Post-loop handling
+        # Step 5: Post-loop handling — stop live encoder
+        if encoder:
+            # Signal match end to live viewers via data channel
+            try:
+                winner_side = 1 if match_result == "P1" else (2 if match_result == "P2" else 0)
+                await redis_pool.stream_publish(
+                    f"match:{match_id}:data",
+                    {b"status": b"ended", b"match_winner": str(winner_side).encode()},
+                    maxlen=settings.redis_data_stream_maxlen,
+                )
+            except Exception:
+                logger.warning("Failed to publish match-end signal")
+            await encoder.stop()
+            encoder = None
+
         if not match_result:
             logger.error(f"Match {match_id} terminated without winner")
             if not calibration:
@@ -343,6 +406,11 @@ async def run_match(
         matches_active.dec()
         duration = time.monotonic() - start_time
         match_duration_seconds.labels(game_id=game_id).observe(duration)
+        if encoder:
+            try:
+                await encoder.stop()
+            except Exception:
+                logger.exception("Failed to stop encoder in cleanup")
         recorder.close()
         recorder.cleanup()
         engine.stop()
@@ -354,3 +422,37 @@ async def run_match(
                 "frames": frame_count,
             },
         )
+
+
+async def _publish_live_data(
+    match_id: str,
+    state: MatchState,
+    adapter: GameAdapter,
+    frame_count: int,
+) -> None:
+    """Publish game state to Redis data stream for live viewers.
+
+    Errors are logged and swallowed — data drops are acceptable.
+    """
+    data: dict[bytes, bytes] = {
+        b"timestamp": str(time.time()).encode(),
+        b"p1_health": str(state.p1_health).encode(),
+        b"p2_health": str(state.p2_health).encode(),
+        b"round_number": str(state.round_number).encode(),
+        b"timer": str(state.timer).encode(),
+        b"status": b"live",
+        b"has_round_timer": str(int(adapter.has_round_timer)).encode(),
+        b"frame": str(frame_count).encode(),
+    }
+    # Team game fields (KOF98, Tekken Tag)
+    if hasattr(state, "p1_team_health"):
+        data[b"p1_team_health"] = str(state.p1_team_health).encode()
+        data[b"p2_team_health"] = str(state.p2_team_health).encode()
+        data[b"p1_active_character"] = str(state.p1_active_character).encode()
+        data[b"p2_active_character"] = str(state.p2_active_character).encode()
+    try:
+        await redis_pool.stream_publish(
+            f"match:{match_id}:data", data, maxlen=settings.redis_data_stream_maxlen
+        )
+    except Exception:
+        logger.debug("Failed to publish live data", extra={"match_id": match_id})

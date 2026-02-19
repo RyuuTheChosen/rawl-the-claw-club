@@ -59,6 +59,10 @@ class RedisPool:
         """Read from a Redis stream with BLOCK."""
         return await self.client.xread({stream: last_id}, count=count, block=block)
 
+    async def stream_revrange(self, stream: str, count: int = 10) -> list:
+        """Read entries from a Redis stream in reverse order (newest first)."""
+        return await self.client.xrevrange(stream, count=count)
+
     async def set_with_expiry(self, key: str, value: str, ex: int) -> None:
         """Set a key with expiry in seconds."""
         await self.client.set(key, value, ex=ex)

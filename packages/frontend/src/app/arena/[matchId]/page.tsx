@@ -19,6 +19,8 @@ export default function ArenaPage() {
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
   const [replayData, setReplayData] = useState<MatchDataMessage | null>(null);
+  const [liveData, setLiveData] = useState<MatchDataMessage | null>(null);
+  const [liveEnded, setLiveEnded] = useState(false);
 
   // Initial fetch
   useEffect(() => {
@@ -28,9 +30,12 @@ export default function ArenaPage() {
       .finally(() => setLoading(false));
   }, [matchId]);
 
-  // Adaptive polling: 5s when locked (waiting for replay), 15s otherwise
+  // Derive live/replay state
   const replayReady = !!match?.replay_s3_key;
-  const pollInterval = match?.status === "locked" ? 5_000 : 15_000;
+  const isLive = match?.status === "locked" && !replayReady;
+
+  // Adaptive polling: faster when waiting for replay after live ends, normal otherwise
+  const pollInterval = liveEnded && !replayReady ? 2_000 : match?.status === "locked" ? 5_000 : 15_000;
 
   useEffect(() => {
     if (loading) return;
@@ -40,16 +45,26 @@ export default function ArenaPage() {
     return () => clearInterval(timer);
   }, [matchId, loading, pollInterval]);
 
-  // Data from replay stream (or null if not replaying)
-  const effectiveData = replayReady ? replayData : null;
+  // Effective data: live data takes priority when live, then replay data
+  const effectiveData = isLive ? liveData : replayReady ? replayData : null;
 
   // Derive effective status
   const effectiveStatus: string = replayData?.match_winner
     ? "resolved"
-    : match?.status ?? "open";
+    : liveData?.match_winner
+      ? "resolved"
+      : match?.status ?? "open";
 
   const handleReplayData = useCallback((d: MatchDataMessage) => {
     setReplayData(d);
+  }, []);
+
+  const handleLiveData = useCallback((d: MatchDataMessage) => {
+    setLiveData(d);
+  }, []);
+
+  const handleLiveEnded = useCallback(() => {
+    setLiveEnded(true);
   }, []);
 
   if (loading) {
@@ -129,10 +144,13 @@ export default function ArenaPage() {
             matchFormat={match.match_format}
             gameId={match.game_id}
             data={effectiveData}
-            dataConnected={replayReady}
+            dataConnected={isLive ? !!liveData : replayReady}
             matchStatus={effectiveStatus}
             replayReady={replayReady}
+            isLive={isLive}
             onReplayData={handleReplayData}
+            onLiveData={handleLiveData}
+            onLiveEnded={handleLiveEnded}
           />
           <div className="space-y-4">
             <BettingPanel

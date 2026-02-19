@@ -83,6 +83,17 @@ class Settings(BaseSettings):
     # Rate limiting
     rate_limit_enabled: bool = True
 
+    # Live streaming
+    live_streaming_enabled: bool = True
+    ffmpeg_path: str = "ffmpeg"
+    h264_keyframe_interval: int = 30
+    h264_crf: int = 23
+    live_stream_width: int = 256
+    live_stream_height: int = 256
+    redis_video_stream_maxlen: int = 300
+    redis_data_stream_maxlen: int = 100
+    redis_stream_ttl_seconds: int = 300
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"
