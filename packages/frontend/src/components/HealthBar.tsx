@@ -48,6 +48,11 @@ export function HealthBar({ health, side, label }: HealthBarProps) {
           "relative h-4 w-full overflow-hidden rounded-sm bg-muted/60",
           flash && "ring-1 ring-white/40",
         )}
+        role="progressbar"
+        aria-valuenow={Math.round(percent)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${side === "left" ? "Player 1" : "Player 2"} health: ${Math.round(percent)} percent`}
       >
         {/* Segmented lines */}
         <div className="absolute inset-0 z-10 flex">

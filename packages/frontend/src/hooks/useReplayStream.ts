@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { MatchDataMessage } from "@/types";
+import { useReconnectingWebSocket } from "./useReconnectingWebSocket";
 
 const WS_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api")
   .replace(/\/api\/?$/, "")
@@ -12,54 +13,39 @@ export function useReplayStream(
   replayReady: boolean,
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
 ) {
-  const [connected, setConnected] = useState(false);
   const [data, setData] = useState<MatchDataMessage | null>(null);
   const [ended, setEnded] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
   const latestFrame = useRef<ArrayBuffer | null>(null);
   const rafId = useRef(0);
   const mountedRef = useRef(true);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    setEnded(false);
+  // Suppress reconnection when replay has ended by passing url: null
+  const url = matchId && replayReady && !ended ? `${WS_BASE}/ws/replay/${matchId}` : null;
 
-    if (!matchId || !replayReady || !canvasRef.current) return;
-
-    function renderLatest() {
-      rafId.current = 0;
-      const frame = latestFrame.current;
-      if (!frame || !mountedRef.current) return;
-      latestFrame.current = null;
-      const blob = new Blob([frame], { type: "image/jpeg" });
-      createImageBitmap(blob).then((bitmap) => {
-        if (!mountedRef.current) {
-          bitmap.close();
-          return;
-        }
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext("2d");
-        if (ctx && canvas) {
-          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        }
-        bitmap.close();
-      });
-    }
-
-    const wsUrl = `${WS_BASE}/ws/replay/${matchId}`;
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
-
-    ws.onmessage = (event) => {
+  const onMessage = useCallback(
+    (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
         latestFrame.current = event.data;
         if (!rafId.current) {
-          rafId.current = requestAnimationFrame(renderLatest);
+          rafId.current = requestAnimationFrame(() => {
+            rafId.current = 0;
+            const frame = latestFrame.current;
+            if (!frame || !mountedRef.current) return;
+            latestFrame.current = null;
+            const blob = new Blob([frame], { type: "image/jpeg" });
+            createImageBitmap(blob).then((bitmap) => {
+              if (!mountedRef.current) {
+                bitmap.close();
+                return;
+              }
+              const canvas = canvasRef.current;
+              const ctx = canvas?.getContext("2d");
+              if (ctx && canvas) {
+                ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+              }
+              bitmap.close();
+            });
+          });
         }
       } else {
         try {
@@ -73,18 +59,15 @@ export function useReplayStream(
           // Ignore parse errors
         }
       }
-    };
+    },
+    [canvasRef],
+  );
 
-    return () => {
-      mountedRef.current = false;
-      if (rafId.current) {
-        cancelAnimationFrame(rafId.current);
-        rafId.current = 0;
-      }
-      ws.close();
-      if (wsRef.current === ws) wsRef.current = null;
-    };
-  }, [matchId, replayReady, canvasRef]);
+  const { connected } = useReconnectingWebSocket({
+    url,
+    binaryType: "arraybuffer",
+    onMessage,
+  });
 
   return { connected, data, ended };
 }

@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Press_Start_2P, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/components/WalletProvider";
 import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 import { CrtOverlay } from "@/components/CrtOverlay";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,8 +24,32 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rawl - AI Fighting Game Arena",
-  description: "Watch AI fighters battle, train your own, and bet on matches",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://rawl.gg"),
+  title: {
+    default: "Rawl - AI Fighting Game Arena",
+    template: "%s | Rawl",
+  },
+  description: "Train AI fighters, compete in ranked matches, and bet SOL on outcomes — all on-chain.",
+  openGraph: {
+    title: "Rawl - AI Fighting Game Arena",
+    description: "Train AI fighters, compete in ranked matches, and bet SOL on outcomes — all on-chain.",
+    url: "https://rawl.gg",
+    siteName: "Rawl",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Rawl - AI Fighting Game Arena" }],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Rawl - AI Fighting Game Arena",
+    description: "Train AI fighters, compete in ranked matches, and bet SOL on outcomes.",
+    images: ["/og-image.png"],
+  },
+  icons: { icon: "/favicon.svg" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#FF4500",
 };
 
 export default function RootLayout({
@@ -40,8 +66,10 @@ export default function RootLayout({
         <WalletProvider>
           <Navbar />
           <main>{children}</main>
+          <Footer />
         </WalletProvider>
         <CrtOverlay />
+        <Toaster theme="dark" />
       </body>
     </html>
   );

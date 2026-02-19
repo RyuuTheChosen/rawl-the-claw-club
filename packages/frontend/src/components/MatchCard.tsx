@@ -33,7 +33,7 @@ export function MatchCard({ match }: MatchCardProps) {
       >
         {/* Top row: game + status */}
         <div className="mb-3 flex items-center justify-between">
-          <span className="font-pixel text-[8px] uppercase tracking-wider text-muted-foreground">
+          <span className="font-pixel text-[10px] uppercase tracking-wider text-muted-foreground">
             {match.game_id}
           </span>
           <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export function MatchCard({ match }: MatchCardProps) {
         {/* Countdown for open matches — hides when done */}
         {match.status === "open" && match.starts_at && !countdownDone && (
           <div className="mb-2 flex items-center justify-center gap-2 rounded bg-neon-yellow/10 py-1.5">
-            <span className="font-pixel text-[7px] text-neon-yellow">STARTS IN</span>
+            <span className="font-pixel text-[9px] text-neon-yellow">STARTS IN</span>
             <Countdown targetDate={match.starts_at} onComplete={() => setCountdownDone(true)} />
           </div>
         )}
@@ -70,14 +70,14 @@ export function MatchCard({ match }: MatchCardProps) {
         {/* Refund banner for cancelled matches with pools */}
         {match.status === "cancelled" && match.has_pool && (
           <div className="mb-2 rounded bg-neon-yellow/10 py-1.5 text-center">
-            <span className="font-pixel text-[7px] text-neon-yellow">REFUND AVAILABLE</span>
+            <span className="font-pixel text-[9px] text-neon-yellow">REFUND AVAILABLE</span>
           </div>
         )}
 
         {/* Winner banner for resolved matches */}
         {match.status === "resolved" && winner && (
           <div className="mb-2 rounded bg-neon-green/10 py-1.5 text-center">
-            <span className="font-pixel text-[7px] text-neon-green">
+            <span className="font-pixel text-[9px] text-neon-green">
               WINNER: {winner.name}
             </span>
           </div>
@@ -85,7 +85,7 @@ export function MatchCard({ match }: MatchCardProps) {
 
         {/* Bottom info */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span className="font-pixel text-[8px]">Bo{match.match_format}</span>
+          <span className="font-pixel text-[10px]">Bo{match.match_format}</span>
           <span className="font-mono text-[10px] text-muted-foreground/60">
             {match.id.slice(0, 8)}
           </span>

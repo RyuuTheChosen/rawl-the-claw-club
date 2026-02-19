@@ -30,7 +30,7 @@ export function Navbar() {
   const { crtEnabled, toggleCrt } = useUiStore();
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
+    <nav aria-label="Main navigation" className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
         {/* Logo + Desktop Links */}
         <div className="flex items-center gap-8">
@@ -70,7 +70,7 @@ export function Navbar() {
               "rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground",
               crtEnabled && "text-neon-orange",
             )}
-            title={crtEnabled ? "Disable CRT effect" : "Enable CRT effect"}
+            aria-label={crtEnabled ? "Disable CRT effect" : "Enable CRT effect"}
           >
             <Monitor className="h-4 w-4" />
           </button>
@@ -80,12 +80,12 @@ export function Navbar() {
           {/* Mobile hamburger */}
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <button className="rounded-md p-2 text-muted-foreground md:hidden">
+              <button className="rounded-md p-2 text-muted-foreground md:hidden" aria-label="Open navigation menu">
                 <Menu className="h-5 w-5" />
               </button>
             </SheetTrigger>
             <SheetContent side="right" className="w-64 bg-background border-border">
-              <nav className="mt-8 flex flex-col gap-2">
+              <nav aria-label="Mobile navigation" className="mt-8 flex flex-col gap-2">
                 {navLinks.map(({ href, label, icon: Icon }) => {
                   const active = pathname === href;
                   return (

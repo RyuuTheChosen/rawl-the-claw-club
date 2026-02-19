@@ -183,6 +183,27 @@
   }
 }
 
+/* Mobile wallet button sizing */
+@media (max-width: 640px) {
+  .wallet-adapter-button {
+    font-size: 0.75rem !important;
+    height: 2rem !important;
+    padding: 0 0.75rem !important;
+  }
+  .wallet-adapter-button-trigger {
+    font-size: 0.75rem !important;
+    height: 2rem !important;
+  }
+}
+
+/* Sonner toast overrides for neon aesthetic */
+[data-sonner-toaster] [data-sonner-toast] {
+  --normal-bg: hsl(var(--card));
+  --normal-border: hsl(var(--border));
+  --normal-text: hsl(var(--foreground));
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
 /* Reduced motion: disable all arcade animations */
 @media (prefers-reduced-motion: reduce) {
   .crt-overlay {

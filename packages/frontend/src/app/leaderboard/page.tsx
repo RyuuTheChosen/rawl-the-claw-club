@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { LeaderboardEntry } from "@/types";
 import { getLeaderboard } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
-import { ArcadeLoader } from "@/components/ArcadeLoader";
+import { LeaderboardRowSkeleton } from "@/components/LeaderboardRowSkeleton";
 import { PageTransition } from "@/components/PageTransition";
 import { DivisionBadge } from "@/components/DivisionBadge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,7 +51,7 @@ export default function LeaderboardPage() {
           <Tabs value={game} onValueChange={setGame}>
             <TabsList>
               {GAMES.map((g) => (
-                <TabsTrigger key={g} value={g} className="font-pixel text-[8px] uppercase">
+                <TabsTrigger key={g} value={g} className="font-pixel text-[10px] uppercase">
                   {g}
                 </TabsTrigger>
               ))}
@@ -60,7 +60,25 @@ export default function LeaderboardPage() {
         </div>
 
         {data === null ? (
-          <ArcadeLoader text="LOADING SCORES" />
+          <div className="arcade-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-left">
+                  <th className="px-4 py-3 font-pixel text-[10px] text-muted-foreground">#</th>
+                  <th className="px-4 py-3 font-pixel text-[10px] text-muted-foreground">FIGHTER</th>
+                  <th className="px-4 py-3 font-pixel text-[10px] text-muted-foreground">DIV</th>
+                  <th className="px-4 py-3 text-right font-pixel text-[10px] text-muted-foreground">ELO</th>
+                  <th className="hidden px-4 py-3 text-right font-pixel text-[10px] text-muted-foreground sm:table-cell">W/L</th>
+                  <th className="hidden px-4 py-3 text-right font-pixel text-[10px] text-muted-foreground sm:table-cell">MATCHES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <LeaderboardRowSkeleton key={i} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : entries.length === 0 ? (
           <div className="flex min-h-[40vh] items-center justify-center">
             <span className="font-pixel text-sm text-muted-foreground">NO FIGHTERS RANKED</span>
@@ -70,12 +88,12 @@ export default function LeaderboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-left">
-                  <th className="px-4 py-3 font-pixel text-[8px] text-muted-foreground">#</th>
-                  <th className="px-4 py-3 font-pixel text-[8px] text-muted-foreground">FIGHTER</th>
-                  <th className="px-4 py-3 font-pixel text-[8px] text-muted-foreground">DIV</th>
-                  <th className="px-4 py-3 text-right font-pixel text-[8px] text-muted-foreground">ELO</th>
-                  <th className="hidden px-4 py-3 text-right font-pixel text-[8px] text-muted-foreground sm:table-cell">W/L</th>
-                  <th className="hidden px-4 py-3 text-right font-pixel text-[8px] text-muted-foreground sm:table-cell">MATCHES</th>
+                  <th className="px-4 py-3 font-pixel text-[10px] text-muted-foreground">#</th>
+                  <th className="px-4 py-3 font-pixel text-[10px] text-muted-foreground">FIGHTER</th>
+                  <th className="px-4 py-3 font-pixel text-[10px] text-muted-foreground">DIV</th>
+                  <th className="px-4 py-3 text-right font-pixel text-[10px] text-muted-foreground">ELO</th>
+                  <th className="hidden px-4 py-3 text-right font-pixel text-[10px] text-muted-foreground sm:table-cell">W/L</th>
+                  <th className="hidden px-4 py-3 text-right font-pixel text-[10px] text-muted-foreground sm:table-cell">MATCHES</th>
                 </tr>
               </thead>
               <tbody>

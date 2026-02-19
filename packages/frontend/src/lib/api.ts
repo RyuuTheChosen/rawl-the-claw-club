@@ -1,5 +1,12 @@
 import type { Match, Fighter, PaginatedResponse, LeaderboardEntry, PretrainedModel, Bet } from "@/types";
 
+export interface PlatformStats {
+  total_matches: number;
+  active_fighters: number;
+  total_volume_lamports: number;
+  live_matches: number;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -84,4 +91,8 @@ export async function syncBetStatus(
     method: "POST",
     body: JSON.stringify({ wallet_address: walletAddress }),
   });
+}
+
+export async function getStats(): Promise<PlatformStats> {
+  return fetchJson("/stats");
 }

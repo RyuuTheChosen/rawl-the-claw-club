@@ -18,7 +18,11 @@ export function RoundIndicator({
   className,
 }: RoundIndicatorProps) {
   return (
-    <div className={cn("flex items-center gap-4", className)}>
+    <div
+      role="status"
+      aria-label={`Round ${Math.min(winsA + winsB + 1, totalRounds)}: Player 1 has ${winsA} wins, Player 2 has ${winsB} wins`}
+      className={cn("flex items-center gap-4", className)}
+    >
       {/* P1 round dots */}
       <div className="flex gap-1">
         {Array.from({ length: winsNeeded }).map((_, i) => (
@@ -34,7 +38,7 @@ export function RoundIndicator({
         ))}
       </div>
 
-      <span className="font-pixel text-[8px] text-muted-foreground">
+      <span className="font-pixel text-[10px] text-muted-foreground">
         RD {Math.min(winsA + winsB + 1, totalRounds)}
       </span>
 

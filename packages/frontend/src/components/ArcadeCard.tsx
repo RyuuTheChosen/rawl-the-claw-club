@@ -29,10 +29,18 @@ export const ArcadeCard = forwardRef<HTMLDivElement, ArcadeCardProps>(
         transition={{ duration: 0.3 }}
         whileHover={hover ? { scale: 1.01 } : undefined}
         onClick={onClick}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        } : undefined}
         className={cn(
           "arcade-border p-4",
           hover && glowMap[glowColor],
-          onClick && "cursor-pointer",
+          onClick && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className,
         )}
       >

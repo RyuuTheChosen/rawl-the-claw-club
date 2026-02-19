@@ -84,10 +84,10 @@ export default function ArenaPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-pixel text-[8px] uppercase text-muted-foreground">
+            <span className="font-pixel text-[10px] uppercase text-muted-foreground">
               {match.game_id}
             </span>
-            <span className="font-pixel text-[8px] text-muted-foreground">
+            <span className="font-pixel text-[10px] text-muted-foreground">
               Bo{match.match_format}
             </span>
           </div>

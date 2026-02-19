@@ -58,6 +58,8 @@ export function MatchViewer({
           width={640}
           height={480}
           className="aspect-[4/3] w-full"
+          role="img"
+          aria-label="Match replay video stream"
         />
 
         {/* Computing overlay -- match is locked but replay not ready */}

@@ -10,6 +10,7 @@ import { ArcadeButton } from "./ArcadeButton";
 import { Countdown } from "./Countdown";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface BettingPanelProps {
   matchId: string;
@@ -65,6 +66,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
     if (sig) {
       setTxSignature(sig);
       setAmount("");
+      toast.success("Bet placed!", { description: `TX: ${sig.slice(0, 16)}...` });
       // Refresh to show existing bet
       setTimeout(refreshBet, 1000);
     }
@@ -74,6 +76,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
     const sig = await claimPayout(matchId, existingBet?.id);
     if (sig) {
       setTxSignature(sig);
+      toast.success("Payout claimed!");
       // Optimistically update local state — tx succeeded on-chain
       setExistingBet((prev) => prev ? { ...prev, status: "claimed" } : null);
       // Sync with backend after a delay (RPC needs time to reflect PDA closure)
@@ -91,6 +94,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
     const sig = await refundBet(matchId, existingBet?.id);
     if (sig) {
       setTxSignature(sig);
+      toast.success("Bet refunded!");
       // Optimistically update local state — tx succeeded on-chain
       setExistingBet((prev) => prev ? { ...prev, status: "refunded" } : null);
       // Sync with backend after a delay (RPC needs time to reflect PDA closure)
@@ -194,12 +198,12 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
         {existingBet.status === "confirmed" && (isOpen || matchStatus === "locked") && (
           <div className="flex items-center justify-center gap-2 py-2">
             <span className="h-2 w-2 animate-pulse rounded-full bg-neon-green" />
-            <span className="font-pixel text-[8px] text-neon-green">MATCH IN PROGRESS</span>
+            <span className="font-pixel text-[10px] text-neon-green">MATCH IN PROGRESS</span>
           </div>
         )}
 
         {(error || claimError || refundError) && (
-          <div className="mt-3 font-pixel text-[8px] text-neon-red">
+          <div className="mt-3 font-pixel text-[10px] text-neon-red">
             {error || claimError || refundError}
           </div>
         )}
@@ -212,7 +216,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
 
         {poolTotal > 0 && (
           <div className="mt-3 border-t border-border pt-2 text-center">
-            <span className="font-pixel text-[8px] text-muted-foreground">TOTAL POOL </span>
+            <span className="font-pixel text-[10px] text-muted-foreground">TOTAL POOL </span>
             <span className="font-mono text-xs text-neon-orange">
               {(poolTotal / 1e9).toFixed(2)} SOL
             </span>
@@ -229,7 +233,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
 
       {isOpen && startsAt && (
         <div className="mb-3 flex items-center justify-between rounded-md bg-neon-yellow/10 px-3 py-2">
-          <span className="font-pixel text-[8px] text-neon-yellow">MATCH STARTS IN</span>
+          <span className="font-pixel text-[10px] text-neon-yellow">MATCH STARTS IN</span>
           <Countdown targetDate={startsAt} />
         </div>
       )}
@@ -239,6 +243,8 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
           <div className="mb-3 grid grid-cols-2 gap-2">
             <button
               onClick={() => setSide("a")}
+              aria-pressed={side === "a"}
+              aria-label="Bet on Player 1"
               className={cn(
                 "rounded-md px-3 py-2.5 text-sm font-semibold transition-all",
                 side === "a"
@@ -246,11 +252,13 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
                   : "bg-muted text-muted-foreground hover:bg-muted/80",
               )}
             >
-              <div className="font-pixel text-[8px]">P1</div>
+              <div className="font-pixel text-[10px]">P1</div>
               <div className="font-mono text-xs">{oddsA.toFixed(2)}x</div>
             </button>
             <button
               onClick={() => setSide("b")}
+              aria-pressed={side === "b"}
+              aria-label="Bet on Player 2"
               className={cn(
                 "rounded-md px-3 py-2.5 text-sm font-semibold transition-all",
                 side === "b"
@@ -258,13 +266,13 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
                   : "bg-muted text-muted-foreground hover:bg-muted/80",
               )}
             >
-              <div className="font-pixel text-[8px]">P2</div>
+              <div className="font-pixel text-[10px]">P2</div>
               <div className="font-mono text-xs">{oddsB.toFixed(2)}x</div>
             </button>
           </div>
 
           <div className="mb-3">
-            <label className="mb-1 block font-pixel text-[8px] text-muted-foreground">
+            <label className="mb-1 block font-pixel text-[10px] text-muted-foreground">
               AMOUNT (SOL)
             </label>
             <Input
@@ -315,7 +323,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
       )}
 
       {(error || claimError || refundError) && (
-        <div className="mt-3 font-pixel text-[8px] text-neon-red">
+        <div className="mt-3 font-pixel text-[10px] text-neon-red">
           {error || claimError || refundError}
         </div>
       )}
@@ -328,7 +336,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
 
       {poolTotal > 0 && (
         <div className="mt-3 border-t border-border pt-2 text-center">
-          <span className="font-pixel text-[8px] text-muted-foreground">TOTAL POOL </span>
+          <span className="font-pixel text-[10px] text-muted-foreground">TOTAL POOL </span>
           <span className="font-mono text-xs text-neon-orange">
             {(poolTotal / 1e9).toFixed(2)} SOL
           </span>

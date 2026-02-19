@@ -54,7 +54,7 @@ export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps)
         <div className="flex items-start gap-2">
           {/* P1 health */}
           <div className="flex-1">
-            <div className="mb-0.5 font-pixel text-[8px] text-neon-cyan">P1</div>
+            <div className="mb-0.5 font-pixel text-[10px] text-neon-cyan">P1</div>
             <HealthBar health={data.health_a} side="left" label={`${Math.round(data.health_a * maxHealth)}`} />
             {data.team_health_a && data.team_health_a.length > 1 && (
               <div className="mt-0.5 flex gap-0.5">
@@ -89,7 +89,7 @@ export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps)
 
           {/* P2 health */}
           <div className="flex-1">
-            <div className="mb-0.5 text-right font-pixel text-[8px] text-neon-pink">P2</div>
+            <div className="mb-0.5 text-right font-pixel text-[10px] text-neon-pink">P2</div>
             <HealthBar health={data.health_b} side="right" label={`${Math.round(data.health_b * maxHealth)}`} />
             {data.team_health_b && data.team_health_b.length > 1 && (
               <div className="mt-0.5 flex gap-0.5">
@@ -111,11 +111,11 @@ export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps)
       {/* Bottom: Pool + Odds */}
       {data.pool_total > 0 && (
         <div className="flex items-center justify-center gap-4 rounded bg-background/60 px-3 py-1 backdrop-blur-sm">
-          <span className="font-pixel text-[8px] text-muted-foreground">POOL</span>
+          <span className="font-pixel text-[10px] text-muted-foreground">POOL</span>
           <span className="font-mono text-xs text-neon-orange">
             {(data.pool_total / 1e9).toFixed(2)} SOL
           </span>
-          <span className="font-pixel text-[8px] text-muted-foreground">ODDS</span>
+          <span className="font-pixel text-[10px] text-muted-foreground">ODDS</span>
           <span className="font-mono text-xs">
             <span className="text-neon-cyan">{data.odds_a.toFixed(2)}</span>
             <span className="text-muted-foreground"> / </span>

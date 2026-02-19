@@ -108,17 +108,17 @@ function BetCard({
     // Already settled
     if (effectiveStatus === "refunded") {
       return (
-        <span className="font-pixel text-[8px] text-neon-green">REFUNDED</span>
+        <span className="font-pixel text-[10px] text-neon-green">REFUNDED</span>
       );
     }
     if (effectiveStatus === "claimed") {
       return (
-        <span className="font-pixel text-[8px] text-neon-green">CLAIMED</span>
+        <span className="font-pixel text-[10px] text-neon-green">CLAIMED</span>
       );
     }
     if (effectiveStatus === "expired") {
       return (
-        <span className="font-pixel text-[8px] text-muted-foreground">EXPIRED</span>
+        <span className="font-pixel text-[10px] text-muted-foreground">EXPIRED</span>
       );
     }
 
@@ -153,7 +153,7 @@ function BetCard({
     // Confirmed + resolved + lost → show loss
     if (effectiveStatus === "confirmed" && bet.match_status === "resolved" && bet.winner_side && bet.winner_side !== bet.side) {
       return (
-        <span className="font-pixel text-[8px] text-neon-red">LOST</span>
+        <span className="font-pixel text-[10px] text-neon-red">LOST</span>
       );
     }
 
@@ -162,7 +162,7 @@ function BetCard({
       return (
         <div className="flex items-center gap-1.5">
           <span className="h-2 w-2 animate-pulse rounded-full bg-neon-green" />
-          <span className="font-pixel text-[8px] text-neon-green">ACTIVE</span>
+          <span className="font-pixel text-[10px] text-neon-green">ACTIVE</span>
         </div>
       );
     }
@@ -175,7 +175,7 @@ function BetCard({
       <ArcadeCard className="flex flex-col gap-2">
         {/* Top: game + match status */}
         <div className="flex items-center justify-between">
-          <span className="font-pixel text-[8px] uppercase tracking-wider text-muted-foreground">
+          <span className="font-pixel text-[10px] uppercase tracking-wider text-muted-foreground">
             {bet.game_id}
           </span>
           <StatusBadge status={bet.match_status} />
@@ -191,7 +191,7 @@ function BetCard({
           >
             {bet.fighter_a_name ?? "P1"}
           </span>
-          <span className="font-pixel text-[8px] text-muted-foreground">VS</span>
+          <span className="font-pixel text-[10px] text-muted-foreground">VS</span>
           <span
             className={cn(
               "font-mono text-sm",
@@ -272,7 +272,7 @@ export default function BetsPage() {
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               {FILTERS.map((f) => (
-                <TabsTrigger key={f} value={f} className="font-pixel text-[8px] uppercase">
+                <TabsTrigger key={f} value={f} className="font-pixel text-[10px] uppercase">
                   {f}
                 </TabsTrigger>
               ))}

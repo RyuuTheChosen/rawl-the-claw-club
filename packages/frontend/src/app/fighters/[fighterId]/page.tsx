@@ -68,7 +68,7 @@ export default function FighterProfilePage() {
                 {fighter.name}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="font-pixel text-[8px] uppercase text-muted-foreground">
+                <span className="font-pixel text-[10px] uppercase text-muted-foreground">
                   {fighter.game_id}
                 </span>
                 <span className="text-xs text-muted-foreground">{fighter.character}</span>
@@ -80,7 +80,7 @@ export default function FighterProfilePage() {
               <div className="font-mono text-3xl text-neon-orange text-glow-orange">
                 {fighter.elo_rating.toFixed(0)}
               </div>
-              <div className="font-pixel text-[8px] text-muted-foreground">ELO RATING</div>
+              <div className="font-pixel text-[10px] text-muted-foreground">ELO RATING</div>
             </div>
           </div>
 
@@ -95,7 +95,7 @@ export default function FighterProfilePage() {
                 <div className={`font-mono text-xl font-bold ${s.color}`}>
                   {s.value}
                 </div>
-                <div className="font-pixel text-[7px] text-muted-foreground">
+                <div className="font-pixel text-[9px] text-muted-foreground">
                   {s.label}
                 </div>
               </div>

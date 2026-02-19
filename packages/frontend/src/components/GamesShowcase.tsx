@@ -1,0 +1,54 @@
+"use client";
+
+import Link from "next/link";
+import { motion } from "motion/react";
+import { ArcadeCard } from "@/components/ArcadeCard";
+import type { GameId } from "@/types";
+
+interface GameInfo {
+  id: GameId;
+  name: string;
+  full: string;
+  glow: "cyan" | "pink" | "green" | "orange";
+}
+
+const GAMES: GameInfo[] = [
+  { id: "sf2ce", name: "SF2 CE", full: "Street Fighter II Champion Edition", glow: "cyan" },
+  { id: "sfiii3n", name: "SF3 3S", full: "Street Fighter III: 3rd Strike", glow: "pink" },
+  { id: "kof98", name: "KOF 98", full: "King of Fighters '98", glow: "green" },
+  { id: "tektagt", name: "TEKKEN TAG", full: "Tekken Tag Tournament", glow: "orange" },
+];
+
+export function GamesShowcase() {
+  return (
+    <section className="mx-auto w-full max-w-4xl px-4 py-12">
+      <motion.h2
+        className="mb-8 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.4 }}
+      >
+        GAMES
+      </motion.h2>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
+        {GAMES.map((game, i) => (
+          <motion.div
+            key={game.id}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1, duration: 0.4 }}
+          >
+            <Link href={`/lobby?game=${game.id}`}>
+              <ArcadeCard glowColor={game.glow} hover className="text-center">
+                <h3 className="font-pixel text-[10px] sm:text-xs">{game.name}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{game.full}</p>
+              </ArcadeCard>
+            </Link>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+}

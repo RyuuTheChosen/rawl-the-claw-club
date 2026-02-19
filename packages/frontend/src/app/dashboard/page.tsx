@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import bs58 from "bs58";
 import Link from "next/link";
 import { Swords, X } from "lucide-react";
+import { toast } from "sonner";
 import { Fighter, Match, PretrainedModel } from "@/types";
 import { useWalletStore } from "@/stores/walletStore";
 import * as gateway from "@/lib/gateway";
@@ -105,7 +106,7 @@ function AdoptForm({
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1 block font-pixel text-[8px] text-muted-foreground">
+        <label className="mb-1 block font-pixel text-[10px] text-muted-foreground">
           MODEL
         </label>
         <Select value={selectedId} onValueChange={setSelectedId}>
@@ -125,7 +126,7 @@ function AdoptForm({
         )}
       </div>
       <div>
-        <label className="mb-1 block font-pixel text-[8px] text-muted-foreground">
+        <label className="mb-1 block font-pixel text-[10px] text-muted-foreground">
           FIGHTER NAME
         </label>
         <Input
@@ -137,7 +138,7 @@ function AdoptForm({
         />
       </div>
       {error && (
-        <p className="font-pixel text-[8px] text-neon-red">{error}</p>
+        <p className="font-pixel text-[10px] text-neon-red">{error}</p>
       )}
       <ArcadeButton
         onClick={handleAdopt}
@@ -185,7 +186,7 @@ function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
       <p className="mb-3 text-sm text-muted-foreground">
         Sign a message to register your wallet and get an API key. Required before deploying fighters.
       </p>
-      {error && <p className="mb-2 font-pixel text-[8px] text-neon-red">{error}</p>}
+      {error && <p className="mb-2 font-pixel text-[10px] text-neon-red">{error}</p>}
       <ArcadeButton
         onClick={handleRegister}
         disabled={registering || !signMessage}
@@ -352,8 +353,10 @@ export default function DashboardPage() {
         ...prev,
         [fighter.id]: { queuedAt: Date.now(), elapsed: 0, queueSize: 0 },
       }));
+      toast.success("Queued for matchmaking!");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Queue failed";
+      toast.error(msg);
       setQueueMap((prev) => ({
         ...prev,
         [fighter.id]: { queuedAt: Date.now(), elapsed: 0, queueSize: 0, error: msg },
@@ -481,7 +484,7 @@ export default function DashboardPage() {
                   <StatusBadge status={fighter.status} />
                 </div>
                 <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-pixel text-[8px] uppercase">{fighter.game_id}</span>
+                  <span className="font-pixel text-[10px] uppercase">{fighter.game_id}</span>
                   <span>{fighter.character}</span>
                 </div>
                 <DivisionBadge division={fighter.division_tier} className="mb-3" />
@@ -489,15 +492,15 @@ export default function DashboardPage() {
                 <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
                   <div>
                     <div className="font-mono text-neon-orange">{fighter.elo_rating.toFixed(0)}</div>
-                    <div className="font-pixel text-[7px] text-muted-foreground">ELO</div>
+                    <div className="font-pixel text-[9px] text-muted-foreground">ELO</div>
                   </div>
                   <div>
                     <div className="font-mono text-neon-green">{fighter.wins}</div>
-                    <div className="font-pixel text-[7px] text-muted-foreground">WINS</div>
+                    <div className="font-pixel text-[9px] text-muted-foreground">WINS</div>
                   </div>
                   <div>
                     <div className="font-mono text-neon-red">{fighter.losses}</div>
-                    <div className="font-pixel text-[7px] text-muted-foreground">LOSSES</div>
+                    <div className="font-pixel text-[9px] text-muted-foreground">LOSSES</div>
                   </div>
                 </div>
 
@@ -516,13 +519,13 @@ export default function DashboardPage() {
                           <Countdown targetDate={matchFoundMap[fighter.id].startsAt!} />
                         )}
                       </div>
-                      <div className="mt-1 text-center font-pixel text-[8px] text-muted-foreground">
+                      <div className="mt-1 text-center font-pixel text-[10px] text-muted-foreground">
                         TAP TO WATCH
                       </div>
                     </div>
                   </Link>
                 ) : queueMap[fighter.id]?.error ? (
-                  <div className="w-full rounded border border-neon-red/30 bg-neon-red/10 px-3 py-1.5 text-center font-pixel text-[8px] text-neon-red">
+                  <div className="w-full rounded border border-neon-red/30 bg-neon-red/10 px-3 py-1.5 text-center font-pixel text-[10px] text-neon-red">
                     {queueMap[fighter.id].error}
                   </div>
                 ) : queueMap[fighter.id] ? (
@@ -540,14 +543,14 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     {queueMap[fighter.id].queueSize > 0 && (
-                      <div className="text-center font-pixel text-[7px] text-muted-foreground">
+                      <div className="text-center font-pixel text-[9px] text-muted-foreground">
                         {queueMap[fighter.id].queueSize} in queue
                       </div>
                     )}
                     <button
                       onClick={(e) => { e.preventDefault(); handleLeaveQueue(fighter); }}
                       disabled={leavingId === fighter.id}
-                      className="flex w-full items-center justify-center gap-1 rounded border border-border py-1 font-pixel text-[8px] text-muted-foreground transition-colors hover:border-neon-red/40 hover:text-neon-red"
+                      className="flex w-full items-center justify-center gap-1 rounded border border-border py-1 font-pixel text-[10px] text-muted-foreground transition-colors hover:border-neon-red/40 hover:text-neon-red"
                     >
                       <X className="h-2.5 w-2.5" />
                       {leavingId === fighter.id ? "LEAVING..." : "LEAVE QUEUE"}
