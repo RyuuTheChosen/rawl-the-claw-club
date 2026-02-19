@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,8 @@ class RetroEngine(EmulationEngine):
         self._adapter = adapter
         self._env = None
         self._obs_size: int = settings.retro_obs_size
+        # Derive a per-match seed from match_id so each match is unique but reproducible
+        self._seed: int = int(hashlib.sha256(match_id.encode()).hexdigest()[:8], 16)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -67,7 +70,11 @@ class RetroEngine(EmulationEngine):
             render_mode="rgb_array",
             inttype=retro.data.Integrations.ALL,
         )
-        raw_obs, raw_info = self._env.reset()
+        raw_obs, raw_info = self._env.reset(seed=self._seed)
+        logger.info(
+            "RetroEngine reset with seed",
+            extra={"match_id": self.match_id, "seed": self._seed},
+        )
         return self._translate_obs(raw_obs), self._translate_info(raw_info)
 
     def step(

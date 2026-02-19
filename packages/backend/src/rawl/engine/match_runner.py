@@ -185,8 +185,8 @@ async def run_match(
                 obs_b = preprocess_for_inference(obs["P2"], obs_shape_b)
 
             # Inference: decide actions (once per batch)
-            action_a, _ = model_a.predict(obs_a, deterministic=True)
-            action_b, _ = model_b.predict(obs_b, deterministic=True)
+            action_a, _ = model_a.predict(obs_a, deterministic=False)
+            action_b, _ = model_b.predict(obs_b, deterministic=False)
             combined_action = {"P1": action_a, "P2": action_b}
 
             # Step emulator FRAME_SKIP times with the same action
