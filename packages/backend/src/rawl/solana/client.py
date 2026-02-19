@@ -252,6 +252,10 @@ class SolanaClient:
         ix = build_cancel_match_ix(match_id, self.oracle_pubkey)
         return await self._build_and_send(ix, "cancel_match")
 
+    def reset(self) -> None:
+        """Drop stale client ref without awaiting close (old event loop is dead)."""
+        self._client = None
+
     async def close(self) -> None:
         if self._client:
             await self._client.close()

@@ -19,13 +19,16 @@ def celery_async_run(coro: Coroutine):
     on the next invocation with "attached to a different loop".
     """
     from rawl.redis_client import redis_pool
+    from rawl.solana.client import solana_client
 
     redis_pool.reset()  # drop old pool ref (old loop is dead, can't await close)
+    solana_client.reset()  # drop stale httpx connections from previous loop
 
     async def _wrapper():
         try:
             return await coro
         finally:
+            await solana_client.close()
             await redis_pool.close()  # cleanly shut down connections on THIS loop
 
     return asyncio.run(_wrapper())
