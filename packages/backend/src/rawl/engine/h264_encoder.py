@@ -64,6 +64,7 @@ class H264Encoder:
             "-video_size", f"{self._width}x{self._height}",
             "-framerate", str(settings.streaming_fps),
             "-i", "pipe:0",
+            "-pix_fmt", "yuv420p",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "zerolatency",
