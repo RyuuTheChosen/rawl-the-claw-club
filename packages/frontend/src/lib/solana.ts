@@ -135,3 +135,17 @@ export async function buildRefundBetData(matchId: string): Promise<Buffer> {
   buf.set(midBytes, 8);
   return buf;
 }
+
+/**
+ * Build the instruction data for refund_no_winners.
+ * Layout: discriminator(8) + match_id(32)
+ */
+export async function buildRefundNoWinnersData(matchId: string): Promise<Buffer> {
+  const disc = await anchorDiscriminator("refund_no_winners");
+  const midBytes = matchIdToBytes(matchId);
+
+  const buf = Buffer.alloc(8 + 32);
+  buf.set(disc, 0);
+  buf.set(midBytes, 8);
+  return buf;
+}

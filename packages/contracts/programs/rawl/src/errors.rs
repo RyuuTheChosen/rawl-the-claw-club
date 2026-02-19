@@ -73,4 +73,7 @@ pub enum RawlError {
 
     #[msg("Betting window must not be negative")]
     InvalidBettingWindow,
+
+    #[msg("Winners exist — use claim_payout instead")]
+    WinnersExist,
 }

@@ -79,6 +79,10 @@ pub mod rawl {
         instructions::refund_bet::handler(ctx, match_id)
     }
 
+    pub fn refund_no_winners(ctx: Context<RefundNoWinners>, match_id: [u8; 32]) -> Result<()> {
+        instructions::refund_no_winners::handler(ctx, match_id)
+    }
+
     pub fn close_bet(ctx: Context<CloseBet>, match_id: [u8; 32]) -> Result<()> {
         instructions::close_bet::handler(ctx, match_id)
     }

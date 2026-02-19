@@ -201,7 +201,26 @@ def build_refund_bet_ix(match_id: str, bettor: Pubkey) -> Instruction:
     return Instruction(_program_id(), data, accounts)
 
 
-# --- 10. close_bet ---
+# --- 10. refund_no_winners ---
+def build_refund_no_winners_ix(match_id: str, bettor: Pubkey) -> Instruction:
+    """Refund a losing bettor when the winning side has zero bets."""
+    mid_bytes = match_id_to_bytes(match_id)
+    match_pool_pda, _ = derive_match_pool_pda(match_id)
+    bet_pda, _ = derive_bet_pda(match_id, bettor)
+    vault_pda, _ = derive_vault_pda(match_id)
+
+    data = _discriminator("refund_no_winners") + mid_bytes
+    accounts = [
+        AccountMeta(match_pool_pda, is_signer=False, is_writable=True),
+        AccountMeta(bet_pda, is_signer=False, is_writable=True),
+        AccountMeta(vault_pda, is_signer=False, is_writable=True),
+        AccountMeta(bettor, is_signer=True, is_writable=True),
+        AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+    ]
+    return Instruction(_program_id(), data, accounts)
+
+
+# --- 11. close_bet ---
 def build_close_bet_ix(match_id: str, bettor: Pubkey) -> Instruction:
     mid_bytes = match_id_to_bytes(match_id)
     match_pool_pda, _ = derive_match_pool_pda(match_id)

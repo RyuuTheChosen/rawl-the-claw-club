@@ -11,6 +11,7 @@ import {
   buildPlaceBetData,
   buildClaimPayoutData,
   buildRefundBetData,
+  buildRefundNoWinnersData,
 } from "@/lib/solana";
 import { syncBetStatus } from "@/lib/api";
 
@@ -247,4 +248,78 @@ export function useRefundBet() {
   );
 
   return { refundBet, submitting, error };
+}
+
+/**
+ * Hook for refunding bets when a match resolves with no winners on the winning side.
+ * Standard parimutuel edge case: all bets are on the losing side.
+ */
+export function useRefundNoWinners() {
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refundNoWinners = useCallback(
+    async (matchId: string, betId?: string): Promise<string | null> => {
+      if (!publicKey) {
+        setError("Wallet not connected");
+        return null;
+      }
+
+      setSubmitting(true);
+      setError(null);
+
+      try {
+        const { PublicKey, TransactionInstruction, Transaction, SystemProgram } = await import(
+          "@solana/web3.js"
+        );
+
+        const programId = new PublicKey(PROGRAM_ID);
+
+        const matchPoolPda = await deriveMatchPoolPda(matchId);
+        const betPda = await deriveBetPda(matchId, publicKey.toBase58());
+        const vaultPda = await deriveVaultPda(matchId);
+
+        const data = await buildRefundNoWinnersData(matchId);
+
+        // Accounts match refund_no_winners.rs
+        const instruction = new TransactionInstruction({
+          programId,
+          keys: [
+            { pubkey: matchPoolPda, isSigner: false, isWritable: true },
+            { pubkey: betPda, isSigner: false, isWritable: true },
+            { pubkey: vaultPda, isSigner: false, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          data,
+        });
+
+        const tx = new Transaction().add(instruction);
+        const signature = await sendTransaction(tx, connection);
+        await connection.confirmTransaction(signature, "confirmed");
+
+        // Sync bet status in backend (non-critical)
+        if (betId) {
+          try {
+            await syncBetStatus(betId, publicKey.toBase58());
+          } catch {
+            console.warn("Failed to sync bet status after no-winners refund");
+          }
+        }
+
+        return signature;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to refund bet";
+        setError(msg);
+        return null;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [publicKey, sendTransaction, connection],
+  );
+
+  return { refundNoWinners, submitting, error };
 }

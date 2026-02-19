@@ -12,6 +12,7 @@ pub mod close_match;
 pub mod withdraw_fees;
 pub mod sweep_unclaimed;
 pub mod sweep_cancelled;
+pub mod refund_no_winners;
 pub mod update_authority;
 pub mod update_config;
 
@@ -29,5 +30,6 @@ pub use close_match::*;
 pub use withdraw_fees::*;
 pub use sweep_unclaimed::*;
 pub use sweep_cancelled::*;
+pub use refund_no_winners::*;
 pub use update_authority::*;
 pub use update_config::*;
