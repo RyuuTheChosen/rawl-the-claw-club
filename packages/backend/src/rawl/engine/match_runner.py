@@ -30,8 +30,10 @@ HEARTBEAT_INTERVAL = settings.heartbeat_interval_seconds
 DATA_PUBLISH_INTERVAL = settings.streaming_fps // settings.data_channel_hz
 # Frame stacking depth (must match training VecFrameStack n_stack)
 FRAME_STACK_N = 4
-# Wall-clock frame budget for consistent playback speed
-FRAME_BUDGET = 1.0 / settings.streaming_fps
+# Frame skipping: step emulator N times per inference call
+FRAME_SKIP = settings.frame_skip
+# Wall-clock budget for one batch of N frames
+BATCH_BUDGET = FRAME_SKIP / settings.streaming_fps
 
 
 async def run_match(
@@ -50,7 +52,7 @@ async def run_match(
     matches_active.inc()
     logger.info(
         "Starting match",
-        extra={"match_id": match_id, "game_id": game_id, "format": match_format},
+        extra={"match_id": match_id, "game_id": game_id, "format": match_format, "frame_skip": FRAME_SKIP},
     )
 
     adapter = get_adapter(game_id)
@@ -131,12 +133,12 @@ async def run_match(
                 [init_frame_b] * FRAME_STACK_N, maxlen=FRAME_STACK_N
             )
 
-        # Step 4: Game loop
-        while True:
-            frame_start = time.monotonic()
-            frame_count += 1
+        # Step 4: Game loop (two-level: outer=inference, inner=frame skip)
+        done = False
+        while not done:
+            batch_start = time.monotonic()
 
-            # Preprocess observations per model's expected shape
+            # Preprocess observations for inference (once per batch)
             if use_stack_a:
                 frame_a = preprocess_for_inference(obs["P1"], single_shape_a)
                 frame_buf_a.append(frame_a)
@@ -151,80 +153,97 @@ async def run_match(
             else:
                 obs_b = preprocess_for_inference(obs["P2"], obs_shape_b)
 
-            # Get actions from both models
+            # Inference: decide actions (once per batch)
             action_a, _ = model_a.predict(obs_a, deterministic=True)
             action_b, _ = model_b.predict(obs_b, deterministic=True)
             combined_action = {"P1": action_a, "P2": action_b}
 
-            # Step environment
-            obs, reward, terminated, truncated, info = engine.step(combined_action)
-            action_log.append({"P1": action_a.tolist(), "P2": action_b.tolist()})
+            # Step emulator FRAME_SKIP times with the same action
+            for _skip_i in range(FRAME_SKIP):
+                frame_count += 1
 
-            # Extract state
-            state = adapter.extract_state(info)
+                obs, reward, terminated, truncated, info = engine.step(combined_action)
+                action_log.append({"P1": action_a.tolist(), "P2": action_b.tolist()})
 
-            # Continuous field validation
-            validation_errors = field_validator.check_frame(info)
-            if validation_errors:
-                if not match_locked:
-                    logger.error(
-                        "Pre-lock validation error",
-                        extra={"errors": validation_errors},
-                    )
-                    if not calibration:
-                        await oracle_client.submit_cancel(match_id, reason="field_validation")
-                    return None
-                else:
-                    logger.warning(
-                        "Post-lock validation degraded",
-                        extra={"errors": validation_errors},
-                    )
+                state = adapter.extract_state(info)
 
-            if not calibration:
-                # Publish video frame to Redis stream
-                frame_jpeg = encode_mjpeg_frame(obs["P1"])
-                await redis_pool.stream_publish_bytes(
-                    f"match:{match_id}:video", "frame", frame_jpeg
-                )
+                # Continuous field validation
+                validation_errors = field_validator.check_frame(info)
+                if validation_errors:
+                    if not match_locked:
+                        logger.error(
+                            "Pre-lock validation error",
+                            extra={"errors": validation_errors},
+                        )
+                        if not calibration:
+                            await oracle_client.submit_cancel(
+                                match_id, reason="field_validation"
+                            )
+                        return None
+                    else:
+                        logger.warning(
+                            "Post-lock validation degraded",
+                            extra={"errors": validation_errors},
+                        )
 
-                # Publish data at 10Hz
-                if frame_count % DATA_PUBLISH_INTERVAL == 0:
-                    state_dict = asdict(state)
-                    state_dict["match_id"] = match_id
-                    state_dict["status"] = "live"
-                    await redis_pool.stream_publish(
-                        f"match:{match_id}:data",
-                        {k: str(v) for k, v in state_dict.items()},
+                if not calibration:
+                    # Publish video frame to Redis stream (every step)
+                    frame_jpeg = encode_mjpeg_frame(obs["P1"])
+                    await redis_pool.stream_publish_bytes(
+                        f"match:{match_id}:video", "frame", frame_jpeg
                     )
 
-                # Record replay (reuse already-encoded JPEG)
-                recorder.write_frame(
-                    frame_jpeg,
-                    asdict(state) if frame_count % DATA_PUBLISH_INTERVAL == 0 else None,
-                )
+                    # Publish data at 10Hz
+                    if frame_count % DATA_PUBLISH_INTERVAL == 0:
+                        state_dict = asdict(state)
+                        state_dict["match_id"] = match_id
+                        state_dict["status"] = "live"
+                        await redis_pool.stream_publish(
+                            f"match:{match_id}:data",
+                            {k: str(v) for k, v in state_dict.items()},
+                        )
 
-            # Check round over
-            round_result = adapter.is_round_over(info, state=state)
-            if round_result:
-                round_entry = {
-                    "winner": round_result,
-                    "p1_health": state.p1_health,
-                    "p2_health": state.p2_health,
-                }
-                round_history.append(round_entry)
+                    # Record replay (every step, reuse encoded JPEG)
+                    recorder.write_frame(
+                        frame_jpeg,
+                        asdict(state)
+                        if frame_count % DATA_PUBLISH_INTERVAL == 0
+                        else None,
+                    )
 
-                # Check match over
-                match_result = adapter.is_match_over(
-                    info, round_history, state=state, match_format=match_format
-                )
-                if match_result:
+                # Check round over (every step — don't miss transitions)
+                round_result = adapter.is_round_over(info, state=state)
+                if round_result:
+                    round_history.append({
+                        "winner": round_result,
+                        "p1_health": state.p1_health,
+                        "p2_health": state.p2_health,
+                    })
+                    match_result = adapter.is_match_over(
+                        info, round_history, state=state, match_format=match_format
+                    )
+                    if match_result:
+                        done = True
+                        break
+
+                # Check env termination
+                if terminated or truncated:
+                    done = True
                     break
 
-            # Check env termination
-            if terminated or truncated:
-                break
+                # Safety cap
+                if frame_count >= settings.max_match_frames:
+                    logger.error(
+                        "Match exceeded max frames, cancelling",
+                        extra={"match_id": match_id, "frames": frame_count},
+                    )
+                    if not calibration:
+                        await oracle_client.submit_cancel(
+                            match_id, reason="max_frames_exceeded"
+                        )
+                    return None
 
-            # Heartbeat every 15 seconds
+            # Heartbeat (once per batch, not per frame)
             if not calibration:
                 now = time.monotonic()
                 if now - last_heartbeat >= HEARTBEAT_INTERVAL:
@@ -235,23 +254,10 @@ async def run_match(
                     )
                     last_heartbeat = now
 
-            # Safety cap — prevent infinite matches
-            if frame_count >= settings.max_match_frames:
-                logger.error(
-                    "Match exceeded max frames, cancelling",
-                    extra={"match_id": match_id, "frames": frame_count},
-                )
-                if not calibration:
-                    await oracle_client.submit_cancel(
-                        match_id, reason="max_frames_exceeded"
-                    )
-                return None
-
-            # Frame pacing — enforce consistent playback speed
-            if not calibration:
-                elapsed = time.monotonic() - frame_start
-                if elapsed < FRAME_BUDGET:
-                    await asyncio.sleep(FRAME_BUDGET - elapsed)
+                # Frame pacing: sleep for remaining batch budget
+                elapsed = time.monotonic() - batch_start
+                if elapsed < BATCH_BUDGET:
+                    await asyncio.sleep(BATCH_BUDGET - elapsed)
 
         # Step 5: Post-loop handling
         if not match_result:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -47,6 +48,7 @@ class Settings(BaseSettings):
     heartbeat_interval_seconds: int = 15
     max_match_frames: int = 108_000  # ~30 min at 60fps
     pre_match_delay_seconds: int = 60
+    frame_skip: int = 4
 
     # Training tiers
     training_tier_free_timesteps: int = 500_000
@@ -84,6 +86,12 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_format: str = "json"
+
+    @model_validator(mode="after")
+    def _validate_settings(self) -> Settings:
+        if self.frame_skip < 1:
+            raise ValueError(f"frame_skip must be >= 1, got {self.frame_skip}")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:
