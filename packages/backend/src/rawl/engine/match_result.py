@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,8 @@ class MatchResult:
     adapter_version: str = ""
     hash_version: int = 2
     hash_payload: bytes = b""
+    replay_uploaded: bool = True
+    locked_at: datetime | None = None
 
 
 def compute_match_hash(

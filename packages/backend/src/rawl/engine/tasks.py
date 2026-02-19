@@ -82,8 +82,16 @@ async def _execute_match_async(
                 match.hash_version = result.hash_version
                 match.adapter_version = result.adapter_version
                 match.round_history = str(result.round_history)
-                match.replay_s3_key = f"replays/{match_id}.mjpeg"
+                if result.replay_uploaded:
+                    match.replay_s3_key = f"replays/{match_id}.mjpeg"
+                else:
+                    logger.warning(
+                        "Match resolved without replay",
+                        extra={"match_id": match_id},
+                    )
                 match.resolved_at = datetime.now(UTC)
+                if result.locked_at and match.locked_at is None:
+                    match.locked_at = result.locked_at
 
                 # Determine winner_id
                 if result.winner == "P1":

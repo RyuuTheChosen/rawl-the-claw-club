@@ -16,6 +16,7 @@ class KOF98Adapter(GameAdapter):
 
     TEAM_SIZE = 3
     MAX_HEALTH = 103
+    DIRECTIONAL_INDICES = {"left": 6, "right": 7}
 
     def _extract_team_health(self, info: dict, player: str) -> list[float]:
         """Extract and normalize health for all 3 characters."""

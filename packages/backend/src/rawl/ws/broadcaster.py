@@ -219,6 +219,7 @@ def _build_data_message(match_id: str, raw_data: dict) -> dict:
         "team_health_b": _get("p2_team_health"),
         "active_char_a": _get("p1_active_character"),
         "active_char_b": _get("p2_active_character"),
+        "has_round_timer": bool(_safe_int(_get("has_round_timer", 1))),
         "odds_a": _safe_float(_get("odds_a")) or 0,
         "odds_b": _safe_float(_get("odds_b")) or 0,
         "pool_total": _safe_float(_get("pool_total")) or 0,

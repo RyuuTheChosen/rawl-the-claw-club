@@ -33,6 +33,7 @@ export interface MatchDataMessage {
   team_health_b: number[] | null;
   active_char_a: number | null;
   active_char_b: number | null;
+  has_round_timer?: boolean;
   odds_a: number;
   odds_b: number;
   pool_total: number;

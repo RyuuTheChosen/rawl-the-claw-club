@@ -14,12 +14,12 @@ import logging
 import struct
 import time
 import uuid as _uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from rawl.s3_client import download_bytes
+from rawl.s3_client import download_byte_range, download_bytes, get_object_size
 
 logger = logging.getLogger(__name__)
 
@@ -27,21 +27,68 @@ replay_router = APIRouter()
 
 # ─── Replay data container ───────────────────────────────────────────────────
 
-@dataclass(frozen=True)
+_CHUNK_SIZE = 300  # frames per chunk (~5 seconds at 60fps)
+
+
+@dataclass
 class _ReplayData:
-    mjpeg: bytes
+    """Replay container that lazily fetches MJPEG chunks from S3."""
+
+    match_id: str
     offsets: list[int]
     data_entries: list[dict]
     num_frames: int
-    size_bytes: int
+    mjpeg_size: int
+    size_bytes: int  # metadata size for cache accounting
 
-    def extract_frame(self, index: int) -> bytes:
-        """Extract single JPEG frame by index. O(1) via offset lookup."""
+    def __post_init__(self) -> None:
+        self._chunks: dict[int, bytes] = {}
+        self._chunk_lock = asyncio.Lock()
+
+    async def ensure_chunk(self, chunk_idx: int) -> bool:
+        """Download chunk from S3 if not cached. Evicts old chunks."""
+        if chunk_idx in self._chunks:
+            return True
+        async with self._chunk_lock:
+            if chunk_idx in self._chunks:
+                return True  # double-check after lock
+            start_frame = chunk_idx * _CHUNK_SIZE
+            end_frame = min(start_frame + _CHUNK_SIZE, self.num_frames)
+            byte_start = self.offsets[start_frame]
+            byte_end = (
+                self.offsets[end_frame]
+                if end_frame < self.num_frames
+                else self.mjpeg_size
+            )
+            data = await download_byte_range(
+                f"replays/{self.match_id}.mjpeg", byte_start, byte_end
+            )
+            if data is None:
+                return False
+            self._chunks[chunk_idx] = data
+            # Evict chunks more than 1 behind current
+            stale = [k for k in self._chunks if k < chunk_idx - 1]
+            for k in stale:
+                del self._chunks[k]
+            return True
+
+    async def extract_frame(self, index: int) -> bytes | None:
+        """Extract single JPEG frame, fetching chunk on demand."""
         if index < 0 or index >= self.num_frames:
-            raise IndexError(f"Frame {index} out of range [0, {self.num_frames})")
-        start = self.offsets[index]
-        end = self.offsets[index + 1] if index + 1 < self.num_frames else len(self.mjpeg)
-        return self.mjpeg[start:end]
+            return None
+        chunk_idx = index // _CHUNK_SIZE
+        if not await self.ensure_chunk(chunk_idx):
+            return None
+        # Compute local offset within chunk
+        chunk_start_frame = chunk_idx * _CHUNK_SIZE
+        chunk_byte_base = self.offsets[chunk_start_frame]
+        local_start = self.offsets[index] - chunk_byte_base
+        local_end = (
+            (self.offsets[index + 1] - chunk_byte_base)
+            if index + 1 < self.num_frames
+            else len(self._chunks[chunk_idx])
+        )
+        return self._chunks[chunk_idx][local_start:local_end]
 
 
 # ─── Replay cache ────────────────────────────────────────────────────────────
@@ -58,49 +105,68 @@ class _ReplayCache:
 
     async def get(self, match_id: str) -> _ReplayData | None:
         """Get replay data, downloading from S3 if not cached."""
+        # Get or create per-match lock under global lock
         async with self._global_lock:
             if match_id not in self._locks:
                 self._locks[match_id] = asyncio.Lock()
             lock = self._locks[match_id]
 
         async with lock:
+            # Check cache hit
             if match_id in self._cache:
                 data, _ = self._cache[match_id]
                 self._cache[match_id] = (data, time.monotonic())
                 return data
 
+            # Cache miss — download
             replay = await self._download(match_id)
             if replay is None:
                 return None
 
-            self._evict_if_needed()
-            self._cache[match_id] = (replay, time.monotonic())
+            # Insert into cache under global lock
+            async with self._global_lock:
+                self._evict_if_needed()
+                self._cache[match_id] = (replay, time.monotonic())
             return replay
 
     async def _download(self, match_id: str) -> _ReplayData | None:
-        """Download all 3 replay files from S3 and parse."""
-        mjpeg = await download_bytes(f"replays/{match_id}.mjpeg")
+        """Download only index + JSON sidecar (not MJPEG blob)."""
         idx_bytes = await download_bytes(f"replays/{match_id}.idx")
         json_bytes = await download_bytes(f"replays/{match_id}.json")
+        if not idx_bytes or not json_bytes:
+            logger.error(
+                "Failed to download replay metadata",
+                extra={"match_id": match_id},
+            )
+            return None
 
-        if not mjpeg or not idx_bytes or not json_bytes:
-            logger.error("Failed to download replay files", extra={"match_id": match_id})
+        mjpeg_size = await get_object_size(f"replays/{match_id}.mjpeg")
+        if mjpeg_size is None or mjpeg_size == 0:
+            logger.error(
+                "Failed to get MJPEG size", extra={"match_id": match_id}
+            )
             return None
 
         # Parse index (u64 LE offsets)
         num_frames = len(idx_bytes) // 8
+        if num_frames == 0:
+            logger.error("Empty index file", extra={"match_id": match_id})
+            return None
         offsets = list(struct.unpack(f"<{num_frames}Q", idx_bytes))
 
         # Validate offsets are monotonically increasing and within bounds
         for i, offset in enumerate(offsets):
-            if offset >= len(mjpeg):
+            if offset >= mjpeg_size:
                 logger.error(
                     "Corrupt index: offset beyond MJPEG",
                     extra={"frame": i, "offset": offset},
                 )
                 return None
             if i > 0 and offset <= offsets[i - 1]:
-                logger.error("Corrupt index: non-monotonic offset", extra={"frame": i})
+                logger.error(
+                    "Corrupt index: non-monotonic offset",
+                    extra={"frame": i},
+                )
                 return None
 
         # Parse data sidecar
@@ -111,23 +177,29 @@ class _ReplayCache:
             return None
 
         return _ReplayData(
-            mjpeg=mjpeg,
+            match_id=match_id,
             offsets=offsets,
             data_entries=data_entries,
             num_frames=num_frames,
-            size_bytes=len(mjpeg) + len(idx_bytes) + len(json_bytes),
+            mjpeg_size=mjpeg_size,
+            size_bytes=len(idx_bytes) + len(json_bytes),
         )
 
     def _evict_if_needed(self) -> None:
-        """Evict oldest entry if cache is full. Also evict expired entries."""
+        """Evict oldest entry if cache is full. Also evict expired entries.
+
+        Must be called under self._global_lock.
+        """
         now = time.monotonic()
         expired = [k for k, (_, ts) in self._cache.items() if now - ts > _CACHE_TTL_SECONDS]
         for k in expired:
             del self._cache[k]
+            self._locks.pop(k, None)
 
         while len(self._cache) >= _MAX_CACHE_ENTRIES:
             oldest = min(self._cache, key=lambda k: self._cache[k][1])
             del self._cache[oldest]
+            self._locks.pop(oldest, None)
 
 
 _cache = _ReplayCache()
@@ -155,6 +227,7 @@ def _translate_data_entry(match_id: str, entry: dict) -> dict:
         "team_health_b": entry.get("p2_team_health"),
         "active_char_a": entry.get("p1_active_character"),
         "active_char_b": entry.get("p2_active_character"),
+        "has_round_timer": entry.get("has_round_timer", True),
         "odds_a": 0,
         "odds_b": 0,
         "pool_total": 0,
@@ -209,6 +282,7 @@ _MAX_STREAMS_PER_IP = 2
 _MAX_GLOBAL_STREAMS = 10
 _ip_stream_count: dict[str, int] = defaultdict(int)
 _global_stream_count = 0
+_ip_lock = asyncio.Lock()
 
 REPLAY_FPS = 60
 DATA_INTERVAL = 6  # Send data every 6th frame (=10Hz at 60fps)
@@ -216,7 +290,7 @@ DATA_INTERVAL = 6  # Send data every 6th frame (=10Hz at 60fps)
 
 @replay_router.websocket("/replay/{match_id}")
 async def replay_endpoint(websocket: WebSocket, match_id: str) -> None:
-    global _global_stream_count
+    global _global_stream_count  # mutated under _ip_lock
 
     # Validate match_id is a UUID
     try:
@@ -225,19 +299,20 @@ async def replay_endpoint(websocket: WebSocket, match_id: str) -> None:
         await websocket.close(code=4000, reason="Invalid match_id")
         return
 
-    # Connection limits
+    # Connection limits — acquire slot under lock
     client_ip = _get_client_ip(websocket)
-    if _ip_stream_count[client_ip] >= _MAX_STREAMS_PER_IP:
-        await websocket.close(code=4029, reason="Too many replay streams")
-        return
-    if _global_stream_count >= _MAX_GLOBAL_STREAMS:
-        await websocket.close(code=4029, reason="Server at replay capacity")
-        return
+    async with _ip_lock:
+        if _ip_stream_count[client_ip] >= _MAX_STREAMS_PER_IP:
+            await websocket.close(code=4029, reason="Too many replay streams")
+            return
+        if _global_stream_count >= _MAX_GLOBAL_STREAMS:
+            await websocket.close(code=4029, reason="Server at replay capacity")
+            return
+        _ip_stream_count[client_ip] += 1
+        _global_stream_count += 1
 
-    # Accept connection
+    # Accept AFTER acquiring slot
     await websocket.accept()
-    _ip_stream_count[client_ip] += 1
-    _global_stream_count += 1
 
     try:
         # Load replay (from cache or S3)
@@ -254,32 +329,72 @@ async def replay_endpoint(websocket: WebSocket, match_id: str) -> None:
         disconnected = asyncio.Event()
         watcher = asyncio.create_task(_watch_disconnect(websocket, disconnected))
 
-        # Stream frames at 60fps with drift correction
+        # Stream frames at 60fps with drift correction and backpressure
         stream_start = time.monotonic()
         data_cursor = 0
+        SEND_TIMEOUT = 0.050  # 50ms — ~3 frame periods at 60fps
+        MAX_DROP_RATIO = 0.8  # disconnect if >80% drops in window
+        drop_window: deque[bool] = deque(maxlen=60)
 
         try:
             for i in range(replay.num_frames):
                 if disconnected.is_set():
                     break
 
-                # Extract and send frame
-                frame_bytes = replay.extract_frame(i)
+                # Extract frame (fetches S3 chunk on demand)
+                frame_bytes = await replay.extract_frame(i)
+                if frame_bytes is None:
+                    logger.error(
+                        "Frame extraction failed",
+                        extra={"match_id": match_id, "frame": i},
+                    )
+                    break
+
+                # Prefetch next chunk when entering the last 20% of current
+                frames_into_chunk = i % _CHUNK_SIZE
+                if frames_into_chunk == int(_CHUNK_SIZE * 0.8):
+                    next_chunk = (i // _CHUNK_SIZE) + 1
+                    if next_chunk * _CHUNK_SIZE < replay.num_frames:
+                        asyncio.create_task(replay.ensure_chunk(next_chunk))
+
+                # Send frame with backpressure
                 try:
-                    await websocket.send_bytes(frame_bytes)
+                    await asyncio.wait_for(
+                        websocket.send_bytes(frame_bytes), timeout=SEND_TIMEOUT
+                    )
+                    drop_window.append(False)
+                except asyncio.TimeoutError:
+                    drop_window.append(True)
+                    if len(drop_window) == 60 and sum(drop_window) > int(
+                        60 * MAX_DROP_RATIO
+                    ):
+                        logger.warning(
+                            "Disconnecting slow client",
+                            extra={
+                                "match_id": match_id,
+                                "drops": sum(drop_window),
+                            },
+                        )
+                        break
+                    continue  # skip data message for this frame too
                 except Exception:
                     break
 
                 # Send data at 10Hz (every DATA_INTERVAL frames)
                 if i % DATA_INTERVAL == 0 and replay.data_entries:
-                    found = _find_nearest_entry(replay.data_entries, i + 1, data_cursor)
+                    found = _find_nearest_entry(
+                        replay.data_entries, i + 1, data_cursor
+                    )
                     if found is not None:
                         entry, data_cursor = found
                         msg = _translate_data_entry(match_id, entry)
                         try:
-                            await websocket.send_text(json.dumps(msg))
-                        except Exception:
-                            break
+                            await asyncio.wait_for(
+                                websocket.send_text(json.dumps(msg)),
+                                timeout=SEND_TIMEOUT,
+                            )
+                        except (asyncio.TimeoutError, Exception):
+                            pass  # data message drops are non-fatal
 
                 # Drift-corrected pacing
                 target_time = stream_start + (i + 1) / REPLAY_FPS
@@ -300,5 +415,6 @@ async def replay_endpoint(websocket: WebSocket, match_id: str) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        _ip_stream_count[client_ip] = max(0, _ip_stream_count[client_ip] - 1)
-        _global_stream_count = max(0, _global_stream_count - 1)
+        async with _ip_lock:
+            _ip_stream_count[client_ip] = max(0, _ip_stream_count[client_ip] - 1)
+            _global_stream_count = max(0, _global_stream_count - 1)

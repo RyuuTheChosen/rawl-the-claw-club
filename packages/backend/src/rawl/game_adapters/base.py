@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from rawl.game_adapters.errors import AdapterValidationError
 
 
@@ -40,6 +42,8 @@ class GameAdapter(ABC):
     game_id: str
     adapter_version: str
     required_fields: list[str]
+    has_round_timer: bool = True
+    DIRECTIONAL_INDICES: dict[str, int] = {}
 
     def validate_info(self, info: dict) -> None:
         """Validate that all required fields exist in the info dict.
@@ -56,6 +60,25 @@ class GameAdapter(ABC):
 
         if missing:
             raise AdapterValidationError(self.game_id, missing)
+
+    def mirror_action(self, action: np.ndarray) -> np.ndarray:
+        """Swap left/right directional inputs for P2 perspective correction.
+
+        P2's model sees a flipped frame (its character appears on the left).
+        When it outputs RIGHT it means "advance toward opponent." In the
+        emulator, P2 faces left, so we swap left<->right to preserve
+        directional semantics. Override for platform-specific remapping.
+        """
+        if not self.DIRECTIONAL_INDICES:
+            return action
+        left_idx = self.DIRECTIONAL_INDICES.get("left")
+        right_idx = self.DIRECTIONAL_INDICES.get("right")
+        if left_idx is None or right_idx is None:
+            return action
+        mirrored = action.copy()
+        mirrored[left_idx] = action[right_idx]
+        mirrored[right_idx] = action[left_idx]
+        return mirrored
 
     @abstractmethod
     def extract_state(self, info: dict) -> MatchState | TeamMatchState:

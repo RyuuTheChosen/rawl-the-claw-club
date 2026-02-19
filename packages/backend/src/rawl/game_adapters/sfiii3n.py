@@ -11,6 +11,7 @@ class SFIII3NAdapter(GameAdapter):
     required_fields = ["health", "round", "timer", "stage_side"]
 
     MAX_HEALTH = 160
+    DIRECTIONAL_INDICES = {"left": 6, "right": 7}
 
     def extract_state(self, info: dict) -> MatchState:
         return MatchState(

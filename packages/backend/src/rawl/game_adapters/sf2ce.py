@@ -19,6 +19,8 @@ class SF2CEAdapter(GameAdapter):
     required_fields = ["health", "round_wins"]
 
     MAX_HEALTH = 176
+    has_round_timer = False
+    DIRECTIONAL_INDICES = {"left": 6, "right": 7}
 
     def __init__(self) -> None:
         self._prev_p1_wins: int = 0
@@ -46,10 +48,17 @@ class SF2CEAdapter(GameAdapter):
         p1_wins = info["P1"].get("round_wins", 0)
         p2_wins = info["P2"].get("round_wins", 0)
 
-        if p1_wins > self._prev_p1_wins:
+        p1_won = p1_wins > self._prev_p1_wins
+        p2_won = p2_wins > self._prev_p2_wins
+
+        if p1_won and p2_won:
+            self._prev_p1_wins = p1_wins
+            self._prev_p2_wins = p2_wins
+            return "DRAW"
+        if p1_won:
             self._prev_p1_wins = p1_wins
             return "P1"
-        if p2_wins > self._prev_p2_wins:
+        if p2_won:
             self._prev_p2_wins = p2_wins
             return "P2"
 

@@ -11,6 +11,7 @@ class TekkenTagAdapter(GameAdapter):
     required_fields = ["health", "tag_health", "active_character", "stage_side"]
 
     MAX_HEALTH = 170
+    DIRECTIONAL_INDICES = {"left": 6, "right": 7}
 
     def extract_state(self, info: dict) -> TeamMatchState:
         p1_active_health = max(0.0, info["P1"].get("health", 0) / self.MAX_HEALTH)

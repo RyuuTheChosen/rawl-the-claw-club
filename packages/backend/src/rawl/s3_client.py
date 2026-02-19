@@ -68,6 +68,35 @@ async def download_bytes(key: str) -> bytes | None:
         return None
 
 
+async def download_byte_range(key: str, start: int, end: int) -> bytes | None:
+    """Download a byte range [start, end) from S3. Returns None on failure."""
+    if start < 0 or end <= start:
+        logger.error("Invalid byte range", extra={"key": key, "start": start, "end": end})
+        return None
+    try:
+        async with await _get_client() as client:
+            response = await client.get_object(
+                Bucket=settings.s3_bucket,
+                Key=key,
+                Range=f"bytes={start}-{end - 1}",  # HTTP Range is inclusive
+            )
+            return await response["Body"].read()
+    except Exception:
+        logger.error("S3 range download failed", extra={"key": key}, exc_info=True)
+        return None
+
+
+async def get_object_size(key: str) -> int | None:
+    """Get byte size of an S3 object via HEAD. Returns None on failure."""
+    try:
+        async with await _get_client() as client:
+            response = await client.head_object(Bucket=settings.s3_bucket, Key=key)
+            return response["ContentLength"]
+    except Exception:
+        logger.error("S3 HEAD failed", extra={"key": key}, exc_info=True)
+        return None
+
+
 async def ensure_bucket() -> None:
     """Create the bucket if it doesn't exist (for local dev with MinIO)."""
     try:

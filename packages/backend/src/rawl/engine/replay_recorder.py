@@ -35,6 +35,7 @@ class ReplayRecorder:
         self._current_offset = 0
         self._frame_count = 0
         self._start_time = time.monotonic()
+        self._closed = False
 
     def write_frame(self, jpeg_bytes: bytes, state_dict: dict | None = None) -> None:
         """Write a pre-encoded JPEG frame and optional state data entry."""
@@ -56,7 +57,10 @@ class ReplayRecorder:
             self._data_entries.append(entry)
 
     def close(self) -> None:
-        """Close file handles."""
+        """Close file handles. Safe to call multiple times."""
+        if self._closed:
+            return
+        self._closed = True
         self._mjpeg_file.close()
 
         # Write JSON sidecar

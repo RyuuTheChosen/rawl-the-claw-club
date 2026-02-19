@@ -9,6 +9,7 @@ import numpy as np
 
 from rawl.config import settings
 from rawl.engine.emulation.base import EmulationEngine
+from rawl.game_adapters.base import GameAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,12 @@ class RetroEngine(EmulationEngine):
     One emulator instance per process — Celery prefork workers guarantee this.
     """
 
-    def __init__(self, game_id: str, match_id: str) -> None:
+    def __init__(
+        self, game_id: str, match_id: str, adapter: GameAdapter | None = None
+    ) -> None:
         self.game_id = game_id
         self.match_id = match_id
+        self._adapter = adapter
         self._env = None
         self._obs_size: int = settings.retro_obs_size
 
@@ -99,9 +103,10 @@ class RetroEngine(EmulationEngine):
     # ------------------------------------------------------------------
 
     def _translate_obs(self, raw_obs: np.ndarray) -> dict[str, np.ndarray]:
-        """Resize frame to obs_size x obs_size; serve as both P1 and P2."""
+        """Resize frame to obs_size x obs_size; flip horizontally for P2."""
         resized = cv2.resize(raw_obs, (self._obs_size, self._obs_size))
-        return {"P1": resized, "P2": resized}
+        p2_frame = cv2.flip(resized, 1)  # horizontal flip for P2 perspective
+        return {"P1": resized, "P2": p2_frame}
 
     def _translate_info(self, raw_info: dict[str, Any]) -> dict[str, Any]:
         """Re-nest stable-retro's flat info dict into adapter-expected format.
@@ -160,7 +165,13 @@ class RetroEngine(EmulationEngine):
 
     def _translate_action(self, action_dict: dict[str, np.ndarray]) -> np.ndarray:
         """Convert {"P1": array, "P2": array} to flat concatenated array."""
-        return np.concatenate([action_dict["P1"], action_dict["P2"]])
+        p1_action = action_dict["P1"]
+        p2_action = (
+            self._adapter.mirror_action(action_dict["P2"])
+            if self._adapter is not None
+            else action_dict["P2"]
+        )
+        return np.concatenate([p1_action, p2_action])
 
     # ------------------------------------------------------------------
     # Helpers

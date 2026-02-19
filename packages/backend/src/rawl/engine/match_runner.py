@@ -4,6 +4,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import asdict
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -58,7 +59,7 @@ async def run_match(
         required_fields=adapter.required_fields,
     )
     recorder = ReplayRecorder(match_id)
-    engine = RetroEngine(game_id, match_id)
+    engine = RetroEngine(game_id, match_id, adapter=adapter)
 
     action_log: list = []
     round_history: list[dict] = []
@@ -100,6 +101,7 @@ async def run_match(
             )
             last_heartbeat = time.monotonic()
         match_locked = True
+        lock_time = datetime.now(UTC)
 
         # Detect model observation space to adapt preprocessing
         obs_shape_a = model_a.observation_space.shape
@@ -109,14 +111,29 @@ async def run_match(
             extra={"model_a": obs_shape_a, "model_b": obs_shape_b},
         )
 
-        # Determine if frame stacking is needed per model.
-        # CHW models (e.g. 3x100x128) don't use frame stacking.
-        # HWC single-channel models (e.g. 84x84x1) need frame stacking.
-        use_stack_a = len(obs_shape_a) == 3 and obs_shape_a[0] not in (1, 3)
-        use_stack_b = len(obs_shape_b) == 3 and obs_shape_b[0] not in (1, 3)
-        # For stacked obs (84,84,4): preprocess single frame as (84,84,1)
-        single_shape_a = (*obs_shape_a[:2], 1) if use_stack_a else obs_shape_a
-        single_shape_b = (*obs_shape_b[:2], 1) if use_stack_b else obs_shape_b
+        # SB3 CnnPolicy stores obs in CHW format (VecTransposeImage auto-applied).
+        # VecFrameStack(n_stack=4) on (1,84,84) produces (4,84,84).
+        # VecFrameStack(n_stack=4) on (3,84,84) produces (12,84,84).
+        # Channel dim is always dim 0 in CHW.
+        def _detect_stacking(obs_shape: tuple[int, ...]) -> tuple[bool, tuple[int, ...], int]:
+            """Returns (use_stack, single_frame_shape, stack_axis)."""
+            if len(obs_shape) != 3:
+                return False, obs_shape, 0
+            n_ch = obs_shape[0]
+            if n_ch in (1, 3):
+                return False, obs_shape, 0  # Single grayscale or RGB, no stacking
+            if n_ch == FRAME_STACK_N:
+                # 4 channels = 4 stacked grayscale
+                return True, (1, obs_shape[1], obs_shape[2]), 0
+            if n_ch > FRAME_STACK_N and n_ch % FRAME_STACK_N == 0:
+                # e.g. 12 = 4 stacked RGB (base_channels = 3)
+                base_ch = n_ch // FRAME_STACK_N
+                return True, (base_ch, obs_shape[1], obs_shape[2]), 0
+            # Unknown channel count — treat as non-stacked
+            return False, obs_shape, 0
+
+        use_stack_a, single_shape_a, stack_axis_a = _detect_stacking(obs_shape_a)
+        use_stack_b, single_shape_b, stack_axis_b = _detect_stacking(obs_shape_b)
 
         # Initialize frame stacking buffers (only if needed)
         if use_stack_a:
@@ -137,14 +154,14 @@ async def run_match(
             if use_stack_a:
                 frame_a = preprocess_for_inference(obs["P1"], single_shape_a)
                 frame_buf_a.append(frame_a)
-                obs_a = np.concatenate(list(frame_buf_a), axis=-1)
+                obs_a = np.concatenate(list(frame_buf_a), axis=stack_axis_a)
             else:
                 obs_a = preprocess_for_inference(obs["P1"], obs_shape_a)
 
             if use_stack_b:
                 frame_b = preprocess_for_inference(obs["P2"], single_shape_b)
                 frame_buf_b.append(frame_b)
-                obs_b = np.concatenate(list(frame_buf_b), axis=-1)
+                obs_b = np.concatenate(list(frame_buf_b), axis=stack_axis_b)
             else:
                 obs_b = preprocess_for_inference(obs["P2"], obs_shape_b)
 
@@ -184,12 +201,11 @@ async def run_match(
                 if not calibration:
                     # Record replay only — no Redis publish, run at max speed
                     frame_jpeg = encode_mjpeg_frame(obs["P1"])
-                    recorder.write_frame(
-                        frame_jpeg,
-                        asdict(state)
-                        if frame_count % DATA_RECORD_INTERVAL == 0
-                        else None,
-                    )
+                    state_dict = None
+                    if frame_count % DATA_RECORD_INTERVAL == 0:
+                        state_dict = asdict(state)
+                        state_dict["has_round_timer"] = adapter.has_round_timer
+                    recorder.write_frame(frame_jpeg, state_dict)
 
                 # Check round over (every step — don't miss transitions)
                 round_result = adapter.is_round_over(info, state=state)
@@ -223,7 +239,7 @@ async def run_match(
                         )
                     return None
 
-            # Heartbeat (once per batch, not per frame)
+            # Heartbeat + progress log (once per batch, not per frame)
             if not calibration:
                 now = time.monotonic()
                 if now - last_heartbeat >= HEARTBEAT_INTERVAL:
@@ -233,6 +249,17 @@ async def run_match(
                         ex=60,
                     )
                     last_heartbeat = now
+                    elapsed_total = now - start_time
+                    logger.info(
+                        "Match progress",
+                        extra={
+                            "match_id": match_id,
+                            "frames": frame_count,
+                            "elapsed_s": round(elapsed_total, 1),
+                            "fps": round(frame_count / elapsed_total, 1) if elapsed_total > 0 else 0,
+                            "rounds": len(round_history),
+                        },
+                    )
             # No sleep — run at max speed
 
         # Step 5: Post-loop handling
@@ -266,6 +293,15 @@ async def run_match(
 
             # Upload replay
             replay_ok = await recorder.upload_to_s3()
+            if not replay_ok:
+                logger.error(
+                    "Replay upload failed",
+                    extra={"match_id": match_id},
+                )
+                from rawl.engine.failed_upload_handler import persist_failed_upload
+                await persist_failed_upload(
+                    match_id, f"replays/{match_id}.mjpeg", payload=None
+                )
 
             if not s3_ok:
                 logger.error(
@@ -285,6 +321,8 @@ async def run_match(
             adapter_version=adapter.adapter_version,
             hash_version=2,
             hash_payload=hash_payload,
+            replay_uploaded=replay_ok if not calibration else True,
+            locked_at=lock_time if match_locked else None,
         )
         if not calibration:
             await oracle_client.submit_resolve(match_id, match_result, match_hash)

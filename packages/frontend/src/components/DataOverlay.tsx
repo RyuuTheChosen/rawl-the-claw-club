@@ -71,17 +71,19 @@ export function DataOverlay({ data, matchFormat = 3, gameId }: DataOverlayProps)
             )}
           </div>
 
-          {/* Timer */}
+          {/* Timer + Round indicator */}
           <div className="flex flex-col items-center px-2">
-            <span className="font-pixel text-sm text-neon-yellow text-glow-orange sm:text-lg">
-              {data.timer}
-            </span>
+            {data.has_round_timer !== false && (
+              <span className="font-pixel text-sm text-neon-yellow text-glow-orange sm:text-lg">
+                {data.timer}
+              </span>
+            )}
             <RoundIndicator
               totalRounds={matchFormat}
               winsNeeded={winsNeeded}
               winsA={winsA}
               winsB={winsB}
-              className="mt-0.5"
+              className={data.has_round_timer !== false ? "mt-0.5" : ""}
             />
           </div>
 
