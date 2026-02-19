@@ -21,7 +21,7 @@ const GAMES: GameInfo[] = [
 
 export function GamesShowcase() {
   return (
-    <section className="mx-auto w-full max-w-4xl px-4 py-12">
+    <section className="mx-auto w-full max-w-3xl px-4 py-10">
       <motion.h2
         className="mb-8 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
         initial={{ opacity: 0, y: 20 }}
@@ -31,7 +31,7 @@ export function GamesShowcase() {
       >
         GAMES
       </motion.h2>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         {GAMES.map((game, i) => (
           <motion.div
             key={game.id}
@@ -39,11 +39,12 @@ export function GamesShowcase() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.1, duration: 0.4 }}
+            className="h-full"
           >
-            <Link href={`/lobby?game=${game.id}`}>
-              <ArcadeCard glowColor={game.glow} hover className="text-center">
-                <h3 className="font-pixel text-[10px] sm:text-xs">{game.name}</h3>
-                <p className="mt-1 text-xs text-muted-foreground">{game.full}</p>
+            <Link href={`/lobby?game=${game.id}`} className="block h-full">
+              <ArcadeCard glowColor={game.glow} hover className="h-full text-center px-3 py-3">
+                <h3 className="font-pixel text-[9px] sm:text-[10px]">{game.name}</h3>
+                <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{game.full}</p>
               </ArcadeCard>
             </Link>
           </motion.div>

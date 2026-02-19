@@ -29,10 +29,10 @@ export function FeaturedMatch() {
 
   if (!match) {
     return (
-      <section className="mx-auto w-full max-w-md px-4 py-8">
-        <ArcadeCard glowColor="orange" hover={false} className="text-center">
-          <p className="font-pixel text-[10px] text-muted-foreground">No live matches</p>
-          <Link href="/lobby" className="mt-3 inline-block">
+      <section className="mx-auto w-full max-w-xs px-4 py-6">
+        <ArcadeCard glowColor="orange" hover={false} className="text-center px-3 py-3">
+          <p className="font-pixel text-[9px] text-muted-foreground">No live matches</p>
+          <Link href="/lobby" className="mt-2 inline-block">
             <ArcadeButton variant="ghost" size="sm">Browse Lobby</ArcadeButton>
           </Link>
         </ArcadeCard>

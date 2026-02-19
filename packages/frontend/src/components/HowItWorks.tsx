@@ -13,7 +13,7 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section className="mx-auto w-full max-w-4xl px-4 py-12">
+    <section className="mx-auto w-full max-w-3xl px-4 py-10">
       <motion.h2
         className="mb-8 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
         initial={{ opacity: 0, y: 20 }}
@@ -23,7 +23,7 @@ export function HowItWorks() {
       >
         HOW IT WORKS
       </motion.h2>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         {STEPS.map((step, i) => (
           <motion.div
             key={step.title}
@@ -31,14 +31,15 @@ export function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.15, duration: 0.4 }}
+            className="h-full"
           >
-            <ArcadeCard glowColor={step.glow} hover className="relative text-center">
-              <span className="absolute top-2 left-2 font-mono text-xs text-muted-foreground/40">
+            <ArcadeCard glowColor={step.glow} hover className="relative h-full text-center px-3 py-3">
+              <span className="absolute top-1.5 left-1.5 font-mono text-[10px] text-muted-foreground/40">
                 {i + 1}
               </span>
-              <step.icon className="mx-auto mb-3 h-7 w-7 text-muted-foreground" />
-              <h3 className="mb-1 font-pixel text-[10px]">{step.title}</h3>
-              <p className="text-xs text-muted-foreground">{step.desc}</p>
+              <step.icon className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
+              <h3 className="mb-0.5 font-pixel text-[9px]">{step.title}</h3>
+              <p className="text-[11px] leading-tight text-muted-foreground">{step.desc}</p>
             </ArcadeCard>
           </motion.div>
         ))}
