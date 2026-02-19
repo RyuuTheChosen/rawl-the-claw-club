@@ -18,6 +18,10 @@ RUN mkdir -p src/rawl && touch src/rawl/__init__.py \
     && pip install --no-cache-dir ".[emulation]" \
     && rm -rf src/rawl
 
+# FFmpeg for live H.264 streaming (separate layer to avoid cache issues)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy actual source and reinstall (fast — deps already cached)
 COPY src/ src/
 RUN pip install --no-cache-dir --no-deps .
