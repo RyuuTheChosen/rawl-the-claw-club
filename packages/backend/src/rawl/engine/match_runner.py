@@ -301,14 +301,6 @@ async def run_match(
                 sleep_time = target_time - time.monotonic()
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
-                elif sleep_time < -0.1:
-                    logger.warning(
-                        "Match loop behind schedule",
-                        extra={
-                            "match_id": match_id,
-                            "behind_ms": int(-sleep_time * 1000),
-                        },
-                    )
             # When encoder is None/stopped, runs at max speed (same as before)
 
         # Step 5: Post-loop handling — stop live encoder
