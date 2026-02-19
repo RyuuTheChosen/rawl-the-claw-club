@@ -60,7 +60,7 @@ export function useLiveStream(
     });
 
     decoder.configure({
-      codec: "avc1.42001f", // Baseline profile, level 3.1
+      codec: "avc3.42001f", // Baseline profile, level 3.1 — avc3 = Annex B NAL format
       optimizeForLatency: true,
     });
 
@@ -84,8 +84,8 @@ export function useLiveStream(
 
       const view = new DataView(buf);
       const type = view.getUint8(0);
-      // const timestampUs = view.getBigUint64(1); // available if needed
-      // const seq = view.getUint32(9);            // available if needed
+      const timestampUs = Number(view.getBigUint64(1)); // microseconds since match start
+      // const seq = view.getUint32(9);
 
       if (type === TYPE_EOS) {
         setEnded(true);
@@ -104,7 +104,7 @@ export function useLiveStream(
       try {
         const chunk = new EncodedVideoChunk({
           type: chunkType,
-          timestamp: 0, // We don't need precise timestamps for live display
+          timestamp: timestampUs,
           data: nalData,
         });
         decoder.decode(chunk);
