@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import bs58 from "bs58";
+import { useAccount, useSignMessage } from "wagmi";
 import Link from "next/link";
 import { Swords, X } from "lucide-react";
 import { toast } from "sonner";
@@ -153,25 +152,23 @@ function AdoptForm({
 }
 
 function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
-  const { publicKey, signMessage } = useWallet();
+  const { address } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const { setApiKey, setWalletAddress } = useWalletStore();
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState("");
 
   const handleRegister = async () => {
-    if (!publicKey || !signMessage) return;
+    if (!address) return;
     setRegistering(true);
     setError("");
     try {
       const message = `Sign to register with Rawl: ${Date.now()}`;
-      const encoded = new TextEncoder().encode(message);
-      const signatureBytes = await signMessage(encoded);
-      const signature = bs58.encode(signatureBytes);
-      const walletAddress = publicKey.toBase58();
+      const signature = await signMessageAsync({ message });
 
-      const res = await gateway.register(walletAddress, signature, message);
+      const res = await gateway.register(address, signature, message);
       setApiKey(res.api_key);
-      setWalletAddress(walletAddress);
+      setWalletAddress(address);
       onRegistered();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -189,7 +186,7 @@ function RegisterBanner({ onRegistered }: { onRegistered: () => void }) {
       {error && <p className="mb-2 font-pixel text-[10px] text-neon-red">{error}</p>}
       <ArcadeButton
         onClick={handleRegister}
-        disabled={registering || !signMessage}
+        disabled={registering}
         glow
         className="w-full"
       >
@@ -206,7 +203,7 @@ function formatElapsed(seconds: number): string {
 }
 
 export default function DashboardPage() {
-  const { connected, publicKey } = useWallet();
+  const { isConnected, address } = useAccount();
   const { apiKey } = useWalletStore();
   const [showAdoptForm, setShowAdoptForm] = useState(false);
   const [queueMap, setQueueMap] = useState<Record<string, QueueEntry>>({});
@@ -215,7 +212,7 @@ export default function DashboardPage() {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const walletAddress = publicKey?.toBase58();
+  const walletAddress = address;
 
   // Fighter polling — must be before early return
   const fighterFetcher = useCallback(async () => {
@@ -230,7 +227,7 @@ export default function DashboardPage() {
   } = usePolling<Fighter[]>({
     fetcher: fighterFetcher,
     interval: 10_000,
-    enabled: connected && !!walletAddress,
+    enabled: isConnected && !!walletAddress,
     key: walletAddress ?? "",
   });
 
@@ -325,14 +322,14 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, [Object.keys(queueMap).join(","), apiKey]);
 
-  if (!connected) {
+  if (!isConnected) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
         <span className="font-pixel text-sm text-neon-orange text-glow-orange">
           CONNECT WALLET TO ENTER
         </span>
         <span className="text-xs text-muted-foreground">
-          Link your Solana wallet to access the dashboard
+          Connect your wallet to access the dashboard
         </span>
       </div>
     );
@@ -400,7 +397,7 @@ export default function DashboardPage() {
               DASHBOARD
             </h1>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              {publicKey?.toBase58().slice(0, 8)}...{publicKey?.toBase58().slice(-4)}
+              {address?.slice(0, 6)}...{address?.slice(-4)}
             </p>
           </div>
           {fighterList.length > 0 && (

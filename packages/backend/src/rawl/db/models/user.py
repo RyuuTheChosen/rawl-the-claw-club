@@ -14,7 +14,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    wallet_address: Mapped[str] = mapped_column(String(44), unique=True, nullable=False, index=True)
+    wallet_address: Mapped[str] = mapped_column(String(42), unique=True, nullable=False, index=True)
     api_key_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

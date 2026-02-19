@@ -20,10 +20,10 @@ class Bet(Base):
     match_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("matches.id"), nullable=False, index=True
     )
-    wallet_address: Mapped[str] = mapped_column(String(44), nullable=False, index=True)
+    wallet_address: Mapped[str] = mapped_column(String(42), nullable=False, index=True)
     side: Mapped[str] = mapped_column(String(1), nullable=False)  # "a" or "b"
-    amount_sol: Mapped[float] = mapped_column(Float, nullable=False)
-    onchain_bet_pda: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    amount_eth: Mapped[float] = mapped_column(Float, nullable=False)
+    onchain_bet_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending"
     )  # pending, confirmed, claimed, refunded, expired

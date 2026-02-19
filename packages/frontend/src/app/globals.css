@@ -155,44 +155,30 @@
     transform-origin: right;
   }
 
-  /* Wallet adapter style overrides */
-  .wallet-adapter-button {
+  /* RainbowKit style overrides */
+  [data-rk] button[data-testid="rk-connect-button"] {
     background-color: hsl(var(--primary)) !important;
     color: hsl(var(--primary-foreground)) !important;
     font-family: var(--font-inter), system-ui, sans-serif !important;
     border-radius: var(--radius) !important;
     font-size: 0.875rem !important;
     height: 2.5rem !important;
-    padding: 0 1rem !important;
   }
-  .wallet-adapter-button:hover {
+  [data-rk] [data-testid="rk-connect-button"]:hover {
     background-color: hsl(16 100% 45%) !important;
   }
-  .wallet-adapter-button-trigger {
-    background-color: hsl(var(--primary)) !important;
-  }
-  .wallet-adapter-modal-wrapper {
+  [data-rk] [role="dialog"] {
     background-color: hsl(var(--card)) !important;
     border: 1px solid hsl(var(--border)) !important;
-  }
-  .wallet-adapter-modal-button-close {
-    background-color: hsl(var(--muted)) !important;
-  }
-  .wallet-adapter-modal-list li {
-    background-color: hsl(var(--secondary)) !important;
   }
 }
 
 /* Mobile wallet button sizing */
 @media (max-width: 640px) {
-  .wallet-adapter-button {
+  [data-rk] button[data-testid="rk-connect-button"] {
     font-size: 0.75rem !important;
     height: 2rem !important;
     padding: 0 0.75rem !important;
-  }
-  .wallet-adapter-button-trigger {
-    font-size: 0.75rem !important;
-    height: 2rem !important;
   }
 }
 

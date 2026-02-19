@@ -3,19 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import dynamic from "next/dynamic";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Swords, Trophy, LayoutDashboard, Menu, Monitor, Coins } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useUiStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
-
-const WalletMultiButton = dynamic(
-  () =>
-    import("@solana/wallet-adapter-react-ui").then(
-      (mod) => mod.WalletMultiButton,
-    ),
-  { ssr: false },
-);
 
 const navLinks = [
   { href: "/lobby", label: "Lobby", icon: Swords },
@@ -75,7 +67,7 @@ export function Navbar() {
             <Monitor className="h-4 w-4" />
           </button>
 
-          <WalletMultiButton />
+          <ConnectButton />
 
           {/* Mobile hamburger */}
           <Sheet open={open} onOpenChange={setOpen}>

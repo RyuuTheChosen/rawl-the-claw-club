@@ -1,9 +1,9 @@
 """Celery Beat tasks for bet reconciliation and stale match timeout.
 
 reconcile_bets (every 60s):
-  - Syncs DB bet status with on-chain PDA state for confirmed bets on
+  - Syncs DB bet status with on-chain contract state for confirmed bets on
     cancelled/resolved matches.
-  - Expires pending bets older than 1 hour with no on-chain PDA.
+  - Expires pending bets older than 1 hour with no on-chain bet.
 
 timeout_stale_matches (every 60s):
   - Submits timeout_match on-chain for matches locked > 30 minutes.
@@ -37,13 +37,12 @@ def timeout_stale_matches():
 
 
 async def _reconcile_bets_async():
-    from solders.pubkey import Pubkey
     from sqlalchemy import select
 
     from rawl.db.models.bet import Bet
     from rawl.db.models.match import Match
     from rawl.db.session import worker_session_factory
-    from rawl.solana.client import solana_client
+    from rawl.evm.client import evm_client
 
     try:
         # --- Phase 1: Reconcile confirmed bets on finished matches ---
@@ -62,49 +61,34 @@ async def _reconcile_bets_async():
 
         for bet, match in rows:
             try:
-                # Derive PDA if not stored (may have failed at record time)
-                if bet.onchain_bet_pda:
-                    pda = Pubkey.from_string(bet.onchain_bet_pda)
-                else:
-                    from rawl.solana.pda import derive_bet_pda
-
-                    try:
-                        pda, _ = derive_bet_pda(
-                            str(bet.match_id), Pubkey.from_string(bet.wallet_address)
-                        )
-                        # Backfill PDA
-                        async with worker_session_factory() as db:
-                            result = await db.execute(
-                                select(Bet).where(Bet.id == bet.id)
-                            )
-                            b = result.scalar_one_or_none()
-                            if b:
-                                b.onchain_bet_pda = str(pda)
-                                await db.commit()
-                    except Exception:
-                        logger.warning("Cannot derive PDA for bet %s", bet.id)
-                        continue
-                exists = await solana_client.account_exists(pda)
+                # Check on-chain bet existence
+                exists = await evm_client.bet_exists(
+                    str(bet.match_id), bet.wallet_address
+                )
 
                 if exists is None:
                     # RPC error — skip, don't falsely update
                     logger.warning(
-                        "RPC error checking bet PDA, skipping",
+                        "RPC error checking bet, skipping",
                         extra={"bet_id": str(bet.id), "match_id": str(match.id)},
                     )
                     continue
 
                 if exists:
-                    # PDA still exists — user hasn't claimed/refunded yet
+                    # Bet still on-chain — check if claimed flag is set
+                    bet_data = await evm_client.get_bet(
+                        str(bet.match_id), bet.wallet_address
+                    )
+                    if bet_data and bet_data.get("claimed"):
+                        new_status = "claimed" if match.status == "resolved" else "refunded"
+                    else:
+                        continue  # Not yet claimed/refunded
+
+                else:
+                    # No bet on-chain (shouldn't happen on EVM, but handle gracefully)
                     continue
 
-                # PDA gone — determine new status
                 old_status = bet.status
-                if match.status == "cancelled":
-                    new_status = "refunded"
-                else:
-                    new_status = "claimed"
-
                 async with worker_session_factory() as db:
                     result = await db.execute(
                         select(Bet).where(Bet.id == bet.id, Bet.status == "confirmed")
@@ -144,42 +128,30 @@ async def _reconcile_bets_async():
 
         for bet in stale_pending:
             try:
-                pda_str = bet.onchain_bet_pda
-                if not pda_str:
-                    from rawl.solana.pda import derive_bet_pda as _derive
+                exists = await evm_client.bet_exists(
+                    str(bet.match_id), bet.wallet_address
+                )
 
-                    try:
-                        _pda, _ = _derive(
-                            str(bet.match_id), Pubkey.from_string(bet.wallet_address)
+                if exists is None:
+                    continue  # RPC error, skip
+
+                if exists:
+                    # Bet exists on-chain — promote to confirmed
+                    async with worker_session_factory() as db:
+                        result = await db.execute(
+                            select(Bet).where(Bet.id == bet.id, Bet.status == "pending")
                         )
-                        pda_str = str(_pda)
-                    except Exception:
-                        pass
-
-                if pda_str:
-                    pda = Pubkey.from_string(pda_str)
-                    exists = await solana_client.account_exists(pda)
-
-                    if exists is None:
-                        continue  # RPC error, skip
-
-                    if exists:
-                        # PDA exists — promote to confirmed
-                        async with worker_session_factory() as db:
-                            result = await db.execute(
-                                select(Bet).where(Bet.id == bet.id, Bet.status == "pending")
+                        b = result.scalar_one_or_none()
+                        if b:
+                            b.status = "confirmed"
+                            await db.commit()
+                            logger.info(
+                                "Stale pending bet promoted to confirmed",
+                                extra={"bet_id": str(bet.id)},
                             )
-                            b = result.scalar_one_or_none()
-                            if b:
-                                b.status = "confirmed"
-                                await db.commit()
-                                logger.info(
-                                    "Stale pending bet promoted to confirmed",
-                                    extra={"bet_id": str(bet.id)},
-                                )
-                        continue
+                    continue
 
-                # No PDA or PDA doesn't exist — expire
+                # No bet on-chain — expire
                 async with worker_session_factory() as db:
                     result = await db.execute(
                         select(Bet).where(Bet.id == bet.id, Bet.status == "pending")
@@ -208,8 +180,7 @@ async def _timeout_stale_matches_async():
 
     from rawl.db.models.match import Match
     from rawl.db.session import worker_session_factory
-    from rawl.solana.client import solana_client
-    from rawl.solana.instructions import build_timeout_match_ix
+    from rawl.evm.client import evm_client
 
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOCK_TIMEOUT_SECONDS)
@@ -231,12 +202,10 @@ async def _timeout_stale_matches_async():
         for match in stale_matches:
             match_id = str(match.id)
             try:
-                # Submit timeout_match on-chain (permissionless — oracle can call)
-                ix = build_timeout_match_ix(match_id, solana_client.oracle_pubkey)
-                sig = await solana_client._build_and_send(ix, "timeout_match")
+                sig = await evm_client.timeout_match_on_chain(match_id)
                 logger.info(
                     "Match timed out on-chain",
-                    extra={"match_id": match_id, "signature": sig},
+                    extra={"match_id": match_id, "tx_hash": sig},
                 )
 
                 # Update DB

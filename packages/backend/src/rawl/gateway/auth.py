@@ -3,12 +3,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-import secrets
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Header, Request
-from nacl.signing import VerifyKey
-from nacl.exceptions import BadSignatureError
 
 from rawl.config import settings
 from rawl.dependencies import DbSession
@@ -35,20 +32,18 @@ def verify_wallet_signature(
     signature: str,
     message: str,
 ) -> bool:
-    """Verify an Ed25519 wallet signature using PyNaCl.
+    """Verify an EIP-191 personal_sign wallet signature.
 
     Used in challenge-response authentication flow.
     """
     try:
-        from solders.pubkey import Pubkey
-        import base58
+        from eth_account.messages import encode_defunct
+        from web3 import Web3
 
-        pubkey_bytes = bytes(Pubkey.from_string(wallet_address))
-        verify_key = VerifyKey(pubkey_bytes)
-        sig_bytes = base58.b58decode(signature)
-        verify_key.verify(message.encode(), sig_bytes)
-        return True
-    except (BadSignatureError, Exception) as e:
+        message_hash = encode_defunct(text=message)
+        recovered = Web3().eth.account.recover_message(message_hash, signature=signature)
+        return recovered.lower() == wallet_address.lower()
+    except Exception as e:
         logger.warning(
             "Wallet signature verification failed",
             extra={"wallet": wallet_address, "error": str(e)},

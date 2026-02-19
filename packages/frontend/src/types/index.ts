@@ -34,8 +34,8 @@ export interface Bet {
   match_id: string;
   wallet_address: string;
   side: BetSide;
-  amount_sol: number;
-  onchain_bet_pda: string | null;
+  amount_eth: number;
+  onchain_bet_id: string | null;
   status: BetStatus;
   created_at: string;
   claimed_at: string | null;

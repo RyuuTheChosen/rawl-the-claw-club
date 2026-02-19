@@ -68,23 +68,20 @@ async def check_celery() -> HealthStatus:
         return HealthStatus("celery", False, message=str(e))
 
 
-async def check_solana_rpc() -> HealthStatus:
-    """Check that Solana RPC is reachable."""
-    from rawl.config import settings
-
+async def check_base_rpc() -> HealthStatus:
+    """Check that Base RPC is reachable."""
     start = time.monotonic()
     try:
-        from solana.rpc.async_api import AsyncClient
+        from rawl.evm.client import evm_client
 
-        async with AsyncClient(settings.solana_rpc_url) as client:
-            ok = await client.is_connected()
-            if ok:
-                return HealthStatus(
-                    "solana_rpc", True, latency_ms=(time.monotonic() - start) * 1000
-                )
-            return HealthStatus("solana_rpc", False, message="RPC unhealthy: is_connected returned False")
+        ok = await evm_client.get_health()
+        if ok:
+            return HealthStatus(
+                "base_rpc", True, latency_ms=(time.monotonic() - start) * 1000
+            )
+        return HealthStatus("base_rpc", False, message="RPC unhealthy: is_connected returned False")
     except Exception as e:
-        return HealthStatus("solana_rpc", False, message=str(e))
+        return HealthStatus("base_rpc", False, message=str(e))
 
 
 async def check_retro() -> HealthStatus:
@@ -158,7 +155,7 @@ async def get_all_health() -> list[HealthStatus]:
         check_redis,
         check_s3,
         check_celery,
-        check_solana_rpc,
+        check_base_rpc,
         check_retro,
         check_match_queue,
         check_active_matches,

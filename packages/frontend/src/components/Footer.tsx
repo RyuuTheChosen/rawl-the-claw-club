@@ -22,7 +22,7 @@ export function Footer() {
         {/* Left: branding */}
         <div className="flex flex-col items-center gap-2 sm:items-start">
           <span className="font-pixel text-sm text-neon-orange text-glow-orange">RAWL</span>
-          <span className="text-xs text-muted-foreground">Powered by Solana</span>
+          <span className="text-xs text-muted-foreground">Powered by Base</span>
         </div>
 
         {/* Center: nav */}

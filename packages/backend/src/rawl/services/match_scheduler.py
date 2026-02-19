@@ -137,9 +137,7 @@ async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> bool:
     from rawl.db.models.user import User
 
     try:
-        from solders.pubkey import Pubkey
-
-        from rawl.solana.client import solana_client
+        from rawl.evm.client import evm_client
 
         # Get owner wallet addresses to use as fighter identifiers on-chain
         owner_a = await db.execute(select(User).where(User.id == fighter_a.owner_id))
@@ -154,22 +152,19 @@ async def _create_onchain_pool(db, match, fighter_a, fighter_b) -> bool:
             )
             return False
 
-        fighter_a_pubkey = Pubkey.from_string(user_a.wallet_address)
-        fighter_b_pubkey = Pubkey.from_string(user_b.wallet_address)
-
-        tx_sig = await solana_client.create_match_on_chain(
-            str(match.id), fighter_a_pubkey, fighter_b_pubkey
+        tx_hash = await evm_client.create_match_on_chain(
+            str(match.id), user_a.wallet_address, user_b.wallet_address
         )
 
-        # Store the onchain reference for the account listener
-        match.onchain_match_id = match.id.hex[:32] if hasattr(match.id, 'hex') else str(match.id).replace("-", "")[:32]
+        # Store the onchain reference for the event listener
+        match.onchain_match_id = str(match.id).replace("-", "")[:32]
         await db.commit()
 
         logger.info(
             "On-chain match pool created",
             extra={
                 "match_id": str(match.id),
-                "tx_sig": tx_sig,
+                "tx_hash": tx_hash,
             },
         )
         return True

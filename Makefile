@@ -39,8 +39,20 @@ dev-worker: ## Start Celery worker
 dev-beat: ## Start Celery beat scheduler
 	cd packages/backend && celery -A rawl.celery_app beat --loglevel=info
 
-contracts-build: ## Build Anchor contracts
-	cd packages/contracts && anchor build
+contracts-install: ## Install Foundry contract dependencies
+	cd packages/contracts && forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git
 
-contracts-test: ## Test Anchor contracts
-	cd packages/contracts && anchor test
+contracts-build: ## Build Foundry contracts
+	cd packages/contracts && forge build --sizes
+
+contracts-test: ## Test Foundry contracts
+	cd packages/contracts && forge test -vvv
+
+contracts-test-fuzz: ## Fuzz test contracts (5000 runs)
+	cd packages/contracts && forge test --fuzz-runs 5000 --match-contract Fuzz -vvv
+
+contracts-snapshot: ## Gas snapshot for contracts
+	cd packages/contracts && forge snapshot
+
+contracts-deploy-sepolia: ## Deploy contracts to Base Sepolia
+	cd packages/contracts && forge script script/Deploy.s.sol --rpc-url $$BASE_SEPOLIA_RPC --broadcast --verify

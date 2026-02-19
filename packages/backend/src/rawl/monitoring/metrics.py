@@ -33,5 +33,5 @@ training_jobs_active = Gauge("rawl_training_jobs_active", "Active training jobs"
 # S3 metrics
 s3_uploads_total = Counter("rawl_s3_uploads_total", "S3 upload attempts", ["status"])
 
-# Solana metrics
-solana_tx_total = Counter("rawl_solana_tx_total", "Solana transactions", ["instruction", "status"])
+# Chain metrics
+chain_tx_total = Counter("rawl_chain_tx_total", "On-chain transactions", ["instruction", "status"])

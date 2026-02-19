@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useAccount } from "wagmi";
 import { Bet } from "@/types";
 import { getBets, syncBetStatus } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
@@ -54,7 +54,7 @@ function BetCard({
   bet: Bet;
   onStatusChange: () => void;
 }) {
-  const { publicKey } = useWallet();
+  const { address } = useAccount();
   const { claimPayout, submitting: claiming } = useClaimPayout();
   const { refundBet, submitting: refunding } = useRefundBet();
   const [localStatus, setLocalStatus] = useState<string | null>(null);
@@ -71,15 +71,14 @@ function BetCard({
   const handleRefund = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const sig = await refundBet(bet.match_id, bet.id);
-    if (sig) {
+    const hash = await refundBet(bet.match_id, bet.id);
+    if (hash) {
       // Optimistically update — tx succeeded on-chain
       setLocalStatus("refunded");
-      // Sync with backend after delay (RPC propagation)
-      if (publicKey) {
-        const wallet = publicKey.toBase58();
+      // Sync with backend after delay
+      if (address) {
         setTimeout(async () => {
-          try { await syncBetStatus(bet.id, wallet); } catch { /* non-critical */ }
+          try { await syncBetStatus(bet.id, address); } catch { /* non-critical */ }
           onStatusChange();
         }, 3000);
       }
@@ -89,15 +88,14 @@ function BetCard({
   const handleClaim = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const sig = await claimPayout(bet.match_id, bet.id);
-    if (sig) {
+    const hash = await claimPayout(bet.match_id, bet.id);
+    if (hash) {
       // Optimistically update — tx succeeded on-chain
       setLocalStatus("claimed");
-      // Sync with backend after delay (RPC propagation)
-      if (publicKey) {
-        const wallet = publicKey.toBase58();
+      // Sync with backend after delay
+      if (address) {
         setTimeout(async () => {
-          try { await syncBetStatus(bet.id, wallet); } catch { /* non-critical */ }
+          try { await syncBetStatus(bet.id, address); } catch { /* non-critical */ }
           onStatusChange();
         }, 3000);
       }
@@ -205,7 +203,7 @@ function BetCard({
         {/* Bet info */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
-            <span className="font-mono text-neon-orange">{bet.amount_sol.toFixed(2)} SOL</span>
+            <span className="font-mono text-neon-orange">{bet.amount_eth.toFixed(4)} ETH</span>
             {" on "}
             <span className={cn("font-semibold", bet.side === "a" ? "text-neon-cyan" : "text-neon-pink")}>
               {sideLabel}
@@ -224,10 +222,10 @@ function BetCard({
 }
 
 export default function BetsPage() {
-  const { connected, publicKey } = useWallet();
+  const { isConnected, address } = useAccount();
   const [tab, setTab] = useState<string>("all");
 
-  const wallet = publicKey?.toBase58() ?? "";
+  const wallet = address ?? "";
 
   const fetcher = useCallback((): Promise<Bet[]> => {
     if (!wallet) return Promise.resolve([]);
@@ -237,18 +235,18 @@ export default function BetsPage() {
   const { data: bets, isPolling, refresh } = usePolling({
     fetcher,
     interval: 10_000,
-    enabled: connected && !!wallet,
+    enabled: isConnected && !!wallet,
     key: wallet,
   });
 
-  if (!connected) {
+  if (!isConnected) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
         <span className="font-pixel text-sm text-neon-orange text-glow-orange">
           CONNECT WALLET TO VIEW BETS
         </span>
         <span className="text-xs text-muted-foreground">
-          Link your Solana wallet to see your betting history
+          Connect your wallet to see your betting history
         </span>
       </div>
     );

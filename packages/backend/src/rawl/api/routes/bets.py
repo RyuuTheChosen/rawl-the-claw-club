@@ -14,7 +14,6 @@ from rawl.db.models.bet import Bet
 from rawl.db.models.fighter import Fighter
 from rawl.db.models.match import Match
 from rawl.dependencies import DbSession
-from rawl.solana.pda import derive_bet_pda
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ def _bet_with_match(bet: Bet, match: Match, name_a: str | None, name_b: str | No
 @router.get("/bets", response_model=list[BetWithMatchResponse])
 async def list_bets(
     db: DbSession,
-    wallet: str = Query(..., max_length=44),
+    wallet: str = Query(..., max_length=42),
     match_id: uuid.UUID | None = Query(None),
     status: str | None = Query(None),
 ):
@@ -71,14 +70,14 @@ async def list_bets(
 
 
 class SyncBetRequest(BaseModel):
-    wallet_address: str = Field(..., max_length=44)
+    wallet_address: str = Field(..., max_length=42)
 
     @field_validator("wallet_address")
     @classmethod
     def validate_wallet(cls, v: str) -> str:
         import re
 
-        if not re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{32,44}", v):
+        if not re.fullmatch(r"0x[0-9a-fA-F]{40}", v):
             raise ValueError("Invalid wallet address")
         return v
 
@@ -91,7 +90,7 @@ async def sync_bet_status(
 ):
     """Sync a bet's status by checking on-chain state.
 
-    Verifies the on-chain PDA is gone (claimed/refunded) and updates the DB
+    Verifies the on-chain bet is claimed/refunded and updates the DB
     accordingly. Safe because it reads on-chain truth, not frontend input.
     """
     fa = aliased(Fighter, name="fa")
@@ -123,40 +122,25 @@ async def sync_bet_status(
     if bet.status != "confirmed":
         return _bet_with_match(bet, match, name_a, name_b)
 
-    # Derive PDA if not stored (may have failed at record time)
-    from solders.pubkey import Pubkey
+    from rawl.evm.client import evm_client
 
-    from rawl.solana.client import solana_client
+    bet_data = await evm_client.get_bet(str(bet.match_id), bet.wallet_address)
 
-    if bet.onchain_bet_pda:
-        pda = Pubkey.from_string(bet.onchain_bet_pda)
-    else:
-        try:
-            pda, _ = derive_bet_pda(str(bet.match_id), Pubkey.from_string(bet.wallet_address))
-            # Backfill the PDA for future lookups
-            bet.onchain_bet_pda = str(pda)
-            await db.flush()
-        except Exception:
-            logger.warning("Cannot derive PDA for bet %s", bet_id)
-            return _bet_with_match(bet, match, name_a, name_b)
-    exists = await solana_client.account_exists(pda)
-
-    if exists is None:
-        # RPC error — can't determine state, return current
+    if bet_data is None:
+        # RPC error or no bet found — return current state
         return _bet_with_match(bet, match, name_a, name_b)
 
-    if exists:
-        # PDA still exists — user hasn't claimed/refunded yet
+    if not bet_data.get("claimed"):
+        # Not yet claimed/refunded on-chain
         return _bet_with_match(bet, match, name_a, name_b)
 
-    # PDA is gone — update status based on match state
+    # On-chain bet is claimed — update status based on match state
     if match.status == "cancelled":
         bet.status = "refunded"
     elif match.status == "resolved":
         bet.status = "claimed"
         bet.claimed_at = datetime.now(timezone.utc)
     else:
-        # Unexpected: PDA gone but match not cancelled/resolved
         return _bet_with_match(bet, match, name_a, name_b)
 
     await db.commit()
@@ -193,25 +177,13 @@ async def record_bet(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Bet already recorded for this wallet")
 
-    # Derive the on-chain PDA for reference
-    try:
-        from solders.pubkey import Pubkey
-
-        pda, _ = derive_bet_pda(str(match_id), Pubkey.from_string(body.wallet_address))
-        bet_pda_str = str(pda)
-    except Exception:
-        logger.warning(
-            "PDA derivation failed for bet",
-            extra={"match_id": str(match_id), "wallet": body.wallet_address},
-        )
-        bet_pda_str = None
-
+    match_id_hex = str(match_id).replace("-", "")[:32]
     bet = Bet(
         match_id=match_id,
         wallet_address=body.wallet_address,
         side=body.side,
-        amount_sol=body.amount_sol,
-        onchain_bet_pda=bet_pda_str,
+        amount_eth=body.amount_eth,
+        onchain_bet_id=f"{match_id_hex}:{body.wallet_address}",
         status="confirmed",
     )
     db.add(bet)

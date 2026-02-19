@@ -55,7 +55,7 @@ async def get_platform_stats(db: DbSession) -> PlatformStatsResponse:
         data = PlatformStatsResponse(
             total_matches=total_matches,
             active_fighters=active_fighters,
-            total_volume_lamports=int(volume_raw),
+            total_volume_wei=int(volume_raw),
             live_matches=live_matches,
         )
 
@@ -78,5 +78,5 @@ async def get_platform_stats(db: DbSession) -> PlatformStatsResponse:
             pass
         # No cache, return zeros
         return PlatformStatsResponse(
-            total_matches=0, active_fighters=0, total_volume_lamports=0, live_matches=0
+            total_matches=0, active_fighters=0, total_volume_wei=0, live_matches=0
         )

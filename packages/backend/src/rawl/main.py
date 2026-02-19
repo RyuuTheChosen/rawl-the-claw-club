@@ -38,21 +38,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup: initialize connections
     from rawl.db.session import engine
     from rawl.redis_client import redis_pool
-    from rawl.solana.client import solana_client
-    from rawl.solana.account_listener import account_listener
+    from rawl.evm.client import evm_client
+    from rawl.evm.event_listener import event_listener
 
     await redis_pool.initialize()
-    await solana_client.initialize()
+    await evm_client.initialize()
 
-    # Start account listener as background task
-    listener_task = asyncio.create_task(account_listener.start())
+    # Start event listener as background task
+    listener_task = asyncio.create_task(event_listener.start())
 
     yield
 
     # Shutdown: close connections
-    await account_listener.stop()
+    await event_listener.stop()
     listener_task.cancel()
-    await solana_client.close()
+    await evm_client.close()
     await redis_pool.close()
     await engine.dispose()
 

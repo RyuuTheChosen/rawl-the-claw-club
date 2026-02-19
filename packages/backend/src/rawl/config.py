@@ -33,13 +33,14 @@ class Settings(BaseSettings):
     internal_jwt_secret: str = "change-me-in-production"
     internal_jwt_expiry_seconds: int = 300
 
-    # Solana
-    solana_rpc_url: str = "http://localhost:8899"
-    solana_ws_url: str = "ws://localhost:8900"
-    oracle_keypair_path: str = "./oracle-keypair.json"
-    program_id: str = "AQCBqFfB3hH6CMRNk745NputeXnK7L8nvj15zkAZpd7K"
-    solana_confirm_timeout: int = 30
-    solana_max_retries: int = 3
+    # Base (EVM)
+    base_rpc_url: str = "https://sepolia.base.org"
+    base_ws_url: str = ""
+    base_chain_id: int = 84532  # Base Sepolia (8453 for mainnet)
+    oracle_private_key: str = ""  # hex string, from ORACLE_PRIVATE_KEY env
+    contract_address: str = ""  # from CONTRACT_ADDRESS env
+    base_confirm_timeout: int = 30
+    base_max_retries: int = 3
 
     # Match defaults
     default_match_format: int = 3

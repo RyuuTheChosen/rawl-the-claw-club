@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 logger = logging.getLogger(__name__)
 
 # Thresholds
-CONCENTRATION_POOL_THRESHOLD_SOL = 10.0
+CONCENTRATION_POOL_THRESHOLD_ETH = 10.0
 CONCENTRATION_PERCENTAGE_THRESHOLD = 0.50
 CROSS_WALLET_LOOKBACK_DAYS = 30
 
@@ -17,7 +17,7 @@ CROSS_WALLET_LOOKBACK_DAYS = 30
 async def check_betting_concentration(match_id: str, db_session) -> list[str]:
     """Check for betting concentration alerts.
 
-    Flag: >50% of one side's pool from single wallet AND pool >10 SOL.
+    Flag: >50% of one side's pool from single wallet AND pool >10 ETH.
     Returns list of alert messages.
     """
     from rawl.db.models.bet import Bet
@@ -29,20 +29,20 @@ async def check_betting_concentration(match_id: str, db_session) -> list[str]:
     # Compute side totals from actual bet records (not eventually-consistent match fields)
     for side in ("a", "b"):
         total_result = await db_session.execute(
-            select(func.sum(Bet.amount_sol))
+            select(func.sum(Bet.amount_eth))
             .where(Bet.match_id == match_uuid, Bet.side == side)
         )
         side_total = total_result.scalar() or 0.0
 
-        if side_total < CONCENTRATION_POOL_THRESHOLD_SOL:
+        if side_total < CONCENTRATION_POOL_THRESHOLD_ETH:
             continue
 
         # Find largest single-wallet contribution
         result = await db_session.execute(
-            select(Bet.wallet_address, func.sum(Bet.amount_sol))
+            select(Bet.wallet_address, func.sum(Bet.amount_eth))
             .where(Bet.match_id == match_uuid, Bet.side == side)
             .group_by(Bet.wallet_address)
-            .order_by(func.sum(Bet.amount_sol).desc())
+            .order_by(func.sum(Bet.amount_eth).desc())
             .limit(1)
         )
         row = result.first()
@@ -51,7 +51,7 @@ async def check_betting_concentration(match_id: str, db_session) -> list[str]:
             if amount / side_total > CONCENTRATION_PERCENTAGE_THRESHOLD:
                 msg = (
                     f"P4: Betting concentration alert - wallet {wallet[:8]}... "
-                    f"holds {amount:.2f}/{side_total:.2f} SOL ({amount/side_total:.0%}) "
+                    f"holds {amount:.2f}/{side_total:.2f} ETH ({amount/side_total:.0%}) "
                     f"on side {side.upper()} of match {match_id}"
                 )
                 alerts.append(msg)
@@ -64,7 +64,7 @@ async def flag_cross_wallet_funding(wallet_address: str, db_session) -> bool:
     """Detect potential cross-wallet funding by analysing shared funding sources.
 
     Heuristic: find wallets that bet on the same matches and share a common
-    SOL funding parent (first non-system transfer in).  If any cluster of
+    ETH funding parent (first non-system transfer in).  If any cluster of
     wallets funded by the same source all bet on the same side, flag it.
 
     This is a detective control — logs for post-hoc review.

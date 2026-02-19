@@ -3,7 +3,7 @@ import type { Match, Fighter, PaginatedResponse, LeaderboardEntry, PretrainedMod
 export interface PlatformStats {
   total_matches: number;
   active_fighters: number;
-  total_volume_lamports: number;
+  total_volume_wei: number;
   live_matches: number;
 }
 

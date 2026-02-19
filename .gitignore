@@ -18,9 +18,14 @@ node_modules/
 out/
 .turbo/
 
-# Rust / Anchor
+# Rust / Anchor (legacy)
 target/
 .anchor/
+
+# Foundry (Solidity)
+packages/contracts/cache/
+packages/contracts/out/
+packages/contracts/lib/
 
 # IDE
 .vscode/
@@ -59,9 +64,17 @@ htmlcov/
 # MinIO data
 minio_data/
 
-# Solana
+# Solana (legacy)
 test-ledger/
 oracle-keypair.json
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Pulled env files
+.env.production.pulled
+*.env.*.pulled
 
 # ROMs and emulation artifacts
 roms/

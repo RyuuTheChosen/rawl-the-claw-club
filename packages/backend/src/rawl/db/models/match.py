@@ -38,6 +38,7 @@ class Match(Base):
     onchain_match_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     side_a_total: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     side_b_total: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    chain: Mapped[str] = mapped_column(String(10), nullable=False, default="base")
     cancel_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True

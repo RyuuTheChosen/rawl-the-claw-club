@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useAccount } from "wagmi";
 import { Bet, MatchDataMessage } from "@/types";
 import { getBets, syncBetStatus } from "@/lib/api";
 import { usePlaceBet, useClaimPayout, useRefundBet } from "@/hooks/useBetting";
@@ -21,25 +21,25 @@ interface BettingPanelProps {
 }
 
 export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide = null }: BettingPanelProps) {
-  const { connected, publicKey } = useWallet();
+  const { isConnected, address } = useAccount();
   const [side, setSide] = useState<"a" | "b">("a");
   const [amount, setAmount] = useState("");
   const { placeBet, submitting, error } = usePlaceBet();
   const { claimPayout, submitting: claiming, error: claimError } = useClaimPayout();
   const { refundBet, submitting: refunding, error: refundError } = useRefundBet();
-  const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [existingBet, setExistingBet] = useState<Bet | null>(null);
   const [loadingBet, setLoadingBet] = useState(false);
 
   // Fetch existing bet for this match
   useEffect(() => {
-    if (!connected || !publicKey) {
+    if (!isConnected || !address) {
       setExistingBet(null);
       return;
     }
     let cancelled = false;
     setLoadingBet(true);
-    getBets(publicKey.toBase58(), matchId)
+    getBets(address, matchId)
       .then((bets) => {
         if (!cancelled) setExistingBet(bets.length > 0 ? bets[0] : null);
       })
@@ -50,65 +50,63 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
         if (!cancelled) setLoadingBet(false);
       });
     return () => { cancelled = true; };
-  }, [connected, publicKey, matchId]);
+  }, [isConnected, address, matchId]);
 
   const refreshBet = async () => {
-    if (!publicKey) return;
+    if (!address) return;
     try {
-      const bets = await getBets(publicKey.toBase58(), matchId);
+      const bets = await getBets(address, matchId);
       setExistingBet(bets.length > 0 ? bets[0] : null);
     } catch { /* ignore */ }
   };
 
   const handlePlaceBet = async () => {
-    if (!connected || !amount) return;
-    const sig = await placeBet(matchId, side, parseFloat(amount));
-    if (sig) {
-      setTxSignature(sig);
+    if (!isConnected || !amount) return;
+    const hash = await placeBet(matchId, side, parseFloat(amount));
+    if (hash) {
+      setTxHash(hash);
       setAmount("");
-      toast.success("Bet placed!", { description: `TX: ${sig.slice(0, 16)}...` });
+      toast.success("Bet placed!", { description: `TX: ${hash.slice(0, 16)}...` });
       // Refresh to show existing bet
       setTimeout(refreshBet, 1000);
     }
   };
 
   const handleClaim = async () => {
-    const sig = await claimPayout(matchId, existingBet?.id);
-    if (sig) {
-      setTxSignature(sig);
+    const hash = await claimPayout(matchId, existingBet?.id);
+    if (hash) {
+      setTxHash(hash);
       toast.success("Payout claimed!");
       // Optimistically update local state — tx succeeded on-chain
       setExistingBet((prev) => prev ? { ...prev, status: "claimed" } : null);
-      // Sync with backend after a delay (RPC needs time to reflect PDA closure)
-      if (existingBet && publicKey) {
+      // Sync with backend after a delay
+      if (existingBet && address) {
         const betId = existingBet.id;
-        const wallet = publicKey.toBase58();
         setTimeout(async () => {
-          try { await syncBetStatus(betId, wallet); } catch { /* non-critical */ }
+          try { await syncBetStatus(betId, address); } catch { /* non-critical */ }
         }, 3000);
       }
     }
   };
 
   const handleRefund = async () => {
-    const sig = await refundBet(matchId, existingBet?.id);
-    if (sig) {
-      setTxSignature(sig);
+    const hash = await refundBet(matchId, existingBet?.id);
+    if (hash) {
+      setTxHash(hash);
       toast.success("Bet refunded!");
       // Optimistically update local state — tx succeeded on-chain
       setExistingBet((prev) => prev ? { ...prev, status: "refunded" } : null);
-      // Sync with backend after a delay (RPC needs time to reflect PDA closure)
-      if (existingBet && publicKey) {
+      // Sync with backend after a delay
+      if (existingBet && address) {
         const betId = existingBet.id;
-        const wallet = publicKey.toBase58();
         setTimeout(async () => {
-          try { await syncBetStatus(betId, wallet); } catch { /* non-critical */ }
+          try { await syncBetStatus(betId, address); } catch { /* non-critical */ }
         }, 3000);
       }
     }
   };
 
-  if (!connected) {
+  if (!isConnected) {
     return (
       <ArcadeCard hover={false}>
         <div className="py-4 text-center">
@@ -141,7 +139,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
 
         <div className="mb-3 rounded-md bg-muted/50 px-3 py-2.5 text-center">
           <span className="font-mono text-sm text-neon-orange">
-            {existingBet.amount_sol.toFixed(2)} SOL
+            {existingBet.amount_eth.toFixed(4)} ETH
           </span>
           <span className="text-xs text-muted-foreground"> on </span>
           <span className={cn("font-semibold text-sm", betSideColor)}>
@@ -208,9 +206,9 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
           </div>
         )}
 
-        {txSignature && (
+        {txHash && (
           <div className="mt-2 text-center font-mono text-[10px] text-muted-foreground">
-            TX: {txSignature.slice(0, 16)}...
+            TX: {txHash.slice(0, 16)}...
           </div>
         )}
 
@@ -218,7 +216,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
           <div className="mt-3 border-t border-border pt-2 text-center">
             <span className="font-pixel text-[10px] text-muted-foreground">TOTAL POOL </span>
             <span className="font-mono text-xs text-neon-orange">
-              {(poolTotal / 1e9).toFixed(2)} SOL
+              {(poolTotal / 1e18).toFixed(4)} ETH
             </span>
           </div>
         )}
@@ -273,15 +271,15 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
 
           <div className="mb-3">
             <label className="mb-1 block font-pixel text-[10px] text-muted-foreground">
-              AMOUNT (SOL)
+              AMOUNT (ETH)
             </label>
             <Input
               type="number"
-              min="0.01"
-              step="0.01"
+              min="0.001"
+              step="0.001"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
+              placeholder="0.000"
               className="font-mono"
             />
           </div>
@@ -290,7 +288,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
             <div className="mb-3 text-xs text-muted-foreground">
               Potential payout:{" "}
               <span className="font-mono text-neon-orange">
-                {(parseFloat(amount) * (side === "a" ? oddsA : oddsB)).toFixed(2)} SOL
+                {(parseFloat(amount) * (side === "a" ? oddsA : oddsB)).toFixed(4)} ETH
               </span>
             </div>
           )}
@@ -328,9 +326,9 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
         </div>
       )}
 
-      {txSignature && (
+      {txHash && (
         <div className="mt-2 text-center font-mono text-[10px] text-muted-foreground">
-          TX: {txSignature.slice(0, 16)}...
+          TX: {txHash.slice(0, 16)}...
         </div>
       )}
 
@@ -338,7 +336,7 @@ export function BettingPanel({ matchId, data, matchStatus, startsAt, winningSide
         <div className="mt-3 border-t border-border pt-2 text-center">
           <span className="font-pixel text-[10px] text-muted-foreground">TOTAL POOL </span>
           <span className="font-mono text-xs text-neon-orange">
-            {(poolTotal / 1e9).toFixed(2)} SOL
+            {(poolTotal / 1e18).toFixed(4)} ETH
           </span>
         </div>
       )}
