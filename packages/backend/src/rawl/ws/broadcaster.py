@@ -49,7 +49,7 @@ async def _watch_disconnect(websocket: WebSocket, event: asyncio.Event) -> None:
 
 @ws_router.websocket("/match/{match_id}/video")
 async def video_channel(websocket: WebSocket, match_id: str) -> None:
-    """Binary WebSocket channel streaming JPEG frames at 30fps.
+    """Binary WebSocket channel streaming JPEG frames at 60fps.
 
     Each message = raw JPEG bytes (10-30 KB at 256x256), no JSON wrapper.
     Connection limit: 2 concurrent per IP.
@@ -87,7 +87,7 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
             try:
                 # Read a large batch to skip intermediate frames and catch up
                 messages = await redis_pool.stream_read(
-                    stream_key, last_id=last_id, count=60, block=50
+                    stream_key, last_id=last_id, count=10, block=16
                 )
             except Exception as e:
                 logger.warning("Redis stream read error (video)", extra={"match_id": match_id, "error": str(e)})
@@ -163,7 +163,7 @@ async def data_channel(websocket: WebSocket, match_id: str) -> None:
         while not disconnected.is_set():
             try:
                 messages = await redis_pool.stream_read(
-                    stream_key, last_id=last_id, count=1, block=1000
+                    stream_key, last_id=last_id, count=1, block=200
                 )
             except Exception as e:
                 logger.warning("Redis stream read error (data)", extra={"match_id": match_id, "error": str(e)})

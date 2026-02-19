@@ -26,10 +26,12 @@ logger = logging.getLogger(__name__)
 
 # Heartbeat interval in seconds
 HEARTBEAT_INTERVAL = settings.heartbeat_interval_seconds
-# Data channel publish rate (every N frames at 30fps to achieve ~10Hz)
+# Data channel publish rate (every N frames at streaming_fps to achieve ~10Hz)
 DATA_PUBLISH_INTERVAL = settings.streaming_fps // settings.data_channel_hz
 # Frame stacking depth (must match training VecFrameStack n_stack)
 FRAME_STACK_N = 4
+# Wall-clock frame budget for consistent playback speed
+FRAME_BUDGET = 1.0 / settings.streaming_fps
 
 
 async def run_match(
@@ -131,6 +133,7 @@ async def run_match(
 
         # Step 4: Game loop
         while True:
+            frame_start = time.monotonic()
             frame_count += 1
 
             # Preprocess observations per model's expected shape
@@ -194,9 +197,9 @@ async def run_match(
                         {k: str(v) for k, v in state_dict.items()},
                     )
 
-                # Record replay
+                # Record replay (reuse already-encoded JPEG)
                 recorder.write_frame(
-                    obs["P1"],
+                    frame_jpeg,
                     asdict(state) if frame_count % DATA_PUBLISH_INTERVAL == 0 else None,
                 )
 
@@ -243,6 +246,12 @@ async def run_match(
                         match_id, reason="max_frames_exceeded"
                     )
                 return None
+
+            # Frame pacing — enforce consistent playback speed
+            if not calibration:
+                elapsed = time.monotonic() - frame_start
+                if elapsed < FRAME_BUDGET:
+                    await asyncio.sleep(FRAME_BUDGET - elapsed)
 
         # Step 5: Post-loop handling
         if not match_result:

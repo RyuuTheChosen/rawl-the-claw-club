@@ -6,9 +6,6 @@ import struct
 import time
 from pathlib import Path
 
-import numpy as np
-
-from rawl.engine.frame_processor import encode_mjpeg_frame
 from rawl.s3_client import upload_bytes
 
 logger = logging.getLogger(__name__)
@@ -18,7 +15,7 @@ class ReplayRecorder:
     """Records match replays to MJPEG + JSON sidecar + index file.
 
     Files:
-        {match_id}.mjpeg — concatenated JPEG frames at 30fps
+        {match_id}.mjpeg — concatenated JPEG frames (fps from streaming_fps config)
         {match_id}.json  — timestamped data channel messages at 10Hz
         {match_id}.idx   — array of u64 LE byte offsets into MJPEG for O(1) seek
     """
@@ -39,19 +36,18 @@ class ReplayRecorder:
         self._frame_count = 0
         self._start_time = time.monotonic()
 
-    def write_frame(self, frame_rgb: np.ndarray, state_dict: dict | None = None) -> None:
-        """Write a video frame and optional state data entry."""
+    def write_frame(self, jpeg_bytes: bytes, state_dict: dict | None = None) -> None:
+        """Write a pre-encoded JPEG frame and optional state data entry."""
         # Record offset before writing
         self._frame_offsets.append(self._current_offset)
 
-        # Encode and write MJPEG frame
-        jpeg_bytes = encode_mjpeg_frame(frame_rgb)
+        # Write MJPEG frame (already encoded by caller)
         self._mjpeg_file.write(jpeg_bytes)
         self._current_offset += len(jpeg_bytes)
         self._frame_count += 1
 
-        # Write data at 10Hz (every 3rd frame at 30fps)
-        if state_dict is not None and self._frame_count % 3 == 0:
+        # Write data entry when provided (caller controls the interval)
+        if state_dict is not None:
             entry = {
                 "t": round(time.monotonic() - self._start_time, 3),
                 "frame": self._frame_count,
