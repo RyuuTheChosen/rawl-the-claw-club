@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from collections import deque
@@ -35,6 +36,8 @@ DATA_RECORD_INTERVAL = max(1, settings.streaming_fps // settings.data_channel_hz
 FRAME_STACK_N = 4
 # Frame skipping: step emulator N times per inference call
 FRAME_SKIP = settings.frame_skip
+# Per-button flip probability for match variety (epsilon-greedy noise)
+ACTION_NOISE_PROB = 0.02
 
 
 async def run_match(
@@ -76,6 +79,11 @@ async def run_match(
         logger.info("Loading fighter models", extra={"match_id": match_id})
         model_a = await load_fighter_model(fighter_a_model_path, game_id)
         model_b = await load_fighter_model(fighter_b_model_path, game_id)
+
+        # Seeded RNG for reproducible action noise (match variety)
+        match_rng = np.random.RandomState(
+            int(hashlib.sha256(match_id.encode()).hexdigest()[:8], 16)
+        )
 
         # Step 2: Start emulation engine
         logger.info("Starting emulation engine", extra={"match_id": match_id})
@@ -185,8 +193,15 @@ async def run_match(
                 obs_b = preprocess_for_inference(obs["P2"], obs_shape_b)
 
             # Inference: decide actions (once per batch)
-            action_a, _ = model_a.predict(obs_a, deterministic=False)
-            action_b, _ = model_b.predict(obs_b, deterministic=False)
+            action_a, _ = model_a.predict(obs_a, deterministic=True)
+            action_b, _ = model_b.predict(obs_b, deterministic=True)
+            # Epsilon-greedy noise: flip each button with small probability for
+            # match variety while keeping inference fast (deterministic=True).
+            # Seeded by match_id so results are reproducible for hash verification.
+            noise_a = match_rng.random(action_a.shape) < ACTION_NOISE_PROB
+            noise_b = match_rng.random(action_b.shape) < ACTION_NOISE_PROB
+            action_a = np.where(noise_a, 1 - action_a, action_a)
+            action_b = np.where(noise_b, 1 - action_b, action_b)
             combined_action = {"P1": action_a, "P2": action_b}
 
             # Step emulator FRAME_SKIP times with the same action
@@ -274,6 +289,15 @@ async def run_match(
                         )
                     return None
 
+                # Per-frame pacing for smooth live delivery (drift-corrected).
+                # Must be inside the inner loop so each frame is individually
+                # spaced at ~16.7ms, preventing burst delivery to the frontend.
+                if encoder and encoder.is_running:
+                    target_time = start_time + (frame_count / settings.streaming_fps)
+                    sleep_time = target_time - time.monotonic()
+                    if sleep_time > 0:
+                        await asyncio.sleep(sleep_time)
+
             # Heartbeat + progress log (once per batch, not per frame)
             if not calibration:
                 now = time.monotonic()
@@ -295,12 +319,6 @@ async def run_match(
                             "rounds": len(round_history),
                         },
                     )
-            # Real-time pacing when live streaming (drift-corrected 60fps)
-            if encoder and encoder.is_running:
-                target_time = start_time + (frame_count / settings.streaming_fps)
-                sleep_time = target_time - time.monotonic()
-                if sleep_time > 0:
-                    await asyncio.sleep(sleep_time)
             # When encoder is None/stopped, runs at max speed (same as before)
 
         # Step 5: Post-loop handling — stop live encoder
