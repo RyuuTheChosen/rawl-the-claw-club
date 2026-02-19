@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Trophy } from "lucide-react";
-import { Match } from "@/types";
+import { Match, MatchDataMessage } from "@/types";
 import { getMatch } from "@/lib/api";
 import { cn, getWinnerInfo } from "@/lib/utils";
 import { MatchViewer } from "@/components/MatchViewer";
 import { BettingPanel } from "@/components/BettingPanel";
-import { useMatchDataStream } from "@/hooks/useMatchStream";
 import { ArcadeLoader } from "@/components/ArcadeLoader";
 import { PageTransition } from "@/components/PageTransition";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -19,7 +18,7 @@ export default function ArenaPage() {
   const matchId = params.matchId as string;
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
-  const { data, connected: dataConnected } = useMatchDataStream(matchId);
+  const [replayData, setReplayData] = useState<MatchDataMessage | null>(null);
 
   // Initial fetch
   useEffect(() => {
@@ -29,23 +28,29 @@ export default function ArenaPage() {
       .finally(() => setLoading(false));
   }, [matchId]);
 
-  // Poll match as fallback for WS disconnects — keep sidebar info current
+  // Adaptive polling: 5s when locked (waiting for replay), 15s otherwise
+  const replayReady = !!match?.replay_s3_key;
+  const pollInterval = match?.status === "locked" ? 5_000 : 15_000;
+
   useEffect(() => {
     if (loading) return;
     const timer = setInterval(() => {
       getMatch(matchId).then(setMatch).catch(() => {});
-    }, 15_000);
+    }, pollInterval);
     return () => clearInterval(timer);
-  }, [matchId, loading]);
+  }, [matchId, loading, pollInterval]);
 
-  // Derive effective status from WS data stream with REST fallback
-  const effectiveStatus: string = data?.status === "resolved"
+  // Data from replay stream (or null if not replaying)
+  const effectiveData = replayReady ? replayData : null;
+
+  // Derive effective status
+  const effectiveStatus: string = replayData?.match_winner
     ? "resolved"
-    : data?.status === "cancelled"
-      ? "cancelled"
-      : data?.match_winner
-        ? "resolved"
-        : match?.status ?? "open";
+    : match?.status ?? "open";
+
+  const handleReplayData = useCallback((d: MatchDataMessage) => {
+    setReplayData(d);
+  }, []);
 
   if (loading) {
     return <ArcadeLoader fullPage text="LOADING ARENA" />;
@@ -62,7 +67,7 @@ export default function ArenaPage() {
 
   const nameA = match.fighter_a_name ?? match.fighter_a_id.slice(0, 8);
   const nameB = match.fighter_b_name ?? match.fighter_b_id.slice(0, 8);
-  const winner = getWinnerInfo(match, data);
+  const winner = getWinnerInfo(match, effectiveData);
 
   return (
     <PageTransition>
@@ -119,9 +124,24 @@ export default function ArenaPage() {
 
         {/* Main layout */}
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <MatchViewer matchId={matchId} matchFormat={match.match_format} gameId={match.game_id} data={data} dataConnected={dataConnected} />
+          <MatchViewer
+            matchId={matchId}
+            matchFormat={match.match_format}
+            gameId={match.game_id}
+            data={effectiveData}
+            dataConnected={replayReady}
+            matchStatus={effectiveStatus}
+            replayReady={replayReady}
+            onReplayData={handleReplayData}
+          />
           <div className="space-y-4">
-            <BettingPanel matchId={matchId} data={data} matchStatus={effectiveStatus} startsAt={match.starts_at} winningSide={winner?.side ?? null} />
+            <BettingPanel
+              matchId={matchId}
+              data={effectiveData}
+              matchStatus={effectiveStatus}
+              startsAt={match.starts_at}
+              winningSide={winner?.side ?? null}
+            />
             {/* Match Info card */}
             <div className="arcade-border p-4">
               <h3 className="mb-2 font-pixel text-[10px] text-foreground">MATCH INFO</h3>

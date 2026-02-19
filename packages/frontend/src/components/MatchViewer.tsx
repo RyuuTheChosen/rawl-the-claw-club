@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { MatchDataMessage } from "@/types";
-import { useMatchVideoStream } from "@/hooks/useMatchStream";
+import { useReplayStream } from "@/hooks/useReplayStream";
 import { DataOverlay } from "./DataOverlay";
 import { ArcadeLoader } from "./ArcadeLoader";
 import { cn } from "@/lib/utils";
@@ -13,11 +13,42 @@ interface MatchViewerProps {
   gameId?: string;
   data: MatchDataMessage | null;
   dataConnected: boolean;
+  matchStatus: string;
+  replayReady: boolean;
+  onReplayData?: (d: MatchDataMessage) => void;
+  onReplayEnded?: () => void;
 }
 
-export function MatchViewer({ matchId, matchFormat = 3, gameId, data, dataConnected }: MatchViewerProps) {
+export function MatchViewer({
+  matchId,
+  matchFormat = 3,
+  gameId,
+  data,
+  dataConnected,
+  matchStatus,
+  replayReady,
+  onReplayData,
+  onReplayEnded,
+}: MatchViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { connected: videoConnected } = useMatchVideoStream(matchId, canvasRef);
+
+  const {
+    connected: replayConnected,
+    data: replayData,
+    ended: replayEnded,
+  } = useReplayStream(matchId, replayReady, canvasRef);
+
+  // Lift replay data to parent
+  useEffect(() => {
+    if (replayData && onReplayData) onReplayData(replayData);
+  }, [replayData, onReplayData]);
+
+  useEffect(() => {
+    if (replayEnded && onReplayEnded) onReplayEnded();
+  }, [replayEnded, onReplayEnded]);
+
+  const videoConnected = replayReady ? replayConnected : false;
+  const showComputing = matchStatus === "locked" && !replayReady;
 
   return (
     <div className="relative">
@@ -29,10 +60,17 @@ export function MatchViewer({ matchId, matchFormat = 3, gameId, data, dataConnec
           className="aspect-[4/3] w-full"
         />
 
-        {/* Connection overlay */}
-        {!videoConnected && (
+        {/* Computing overlay -- match is locked but replay not ready */}
+        {showComputing && (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/90">
-            <ArcadeLoader text={dataConnected ? "CONNECTING VIDEO" : "CONNECTING"} />
+            <ArcadeLoader text="COMPUTING MATCH" />
+          </div>
+        )}
+
+        {/* Loading overlay -- replay ready but WS not connected yet */}
+        {replayReady && !replayConnected && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/90">
+            <ArcadeLoader text="LOADING REPLAY" />
           </div>
         )}
 

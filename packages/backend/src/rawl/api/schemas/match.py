@@ -25,11 +25,11 @@ class MatchResponse(BaseModel):
     starts_at: datetime | None = None
     locked_at: datetime | None = None
     resolved_at: datetime | None = None
+    replay_s3_key: str | None = None
 
 
 class MatchDetailResponse(MatchResponse):
     round_history: str | None = None
-    replay_s3_key: str | None = None
     adapter_version: str | None = None
 
 

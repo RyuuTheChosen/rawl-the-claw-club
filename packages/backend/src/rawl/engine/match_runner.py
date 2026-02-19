@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from collections import deque
@@ -26,14 +25,12 @@ logger = logging.getLogger(__name__)
 
 # Heartbeat interval in seconds
 HEARTBEAT_INTERVAL = settings.heartbeat_interval_seconds
-# Data channel publish rate (every N frames at streaming_fps to achieve ~10Hz)
-DATA_PUBLISH_INTERVAL = settings.streaming_fps // settings.data_channel_hz
+# Data recorded at 10Hz (every N frames); used by recorder, not for streaming
+DATA_RECORD_INTERVAL = max(1, settings.streaming_fps // settings.data_channel_hz)
 # Frame stacking depth (must match training VecFrameStack n_stack)
 FRAME_STACK_N = 4
 # Frame skipping: step emulator N times per inference call
 FRAME_SKIP = settings.frame_skip
-# Wall-clock budget for one batch of N frames
-BATCH_BUDGET = FRAME_SKIP / settings.streaming_fps
 
 
 async def run_match(
@@ -136,8 +133,6 @@ async def run_match(
         # Step 4: Game loop (two-level: outer=inference, inner=frame skip)
         done = False
         while not done:
-            batch_start = time.monotonic()
-
             # Preprocess observations for inference (once per batch)
             if use_stack_a:
                 frame_a = preprocess_for_inference(obs["P1"], single_shape_a)
@@ -187,27 +182,12 @@ async def run_match(
                         )
 
                 if not calibration:
-                    # Publish video frame to Redis stream (every step)
+                    # Record replay only — no Redis publish, run at max speed
                     frame_jpeg = encode_mjpeg_frame(obs["P1"])
-                    await redis_pool.stream_publish_bytes(
-                        f"match:{match_id}:video", "frame", frame_jpeg
-                    )
-
-                    # Publish data at 10Hz
-                    if frame_count % DATA_PUBLISH_INTERVAL == 0:
-                        state_dict = asdict(state)
-                        state_dict["match_id"] = match_id
-                        state_dict["status"] = "live"
-                        await redis_pool.stream_publish(
-                            f"match:{match_id}:data",
-                            {k: str(v) for k, v in state_dict.items()},
-                        )
-
-                    # Record replay (every step, reuse encoded JPEG)
                     recorder.write_frame(
                         frame_jpeg,
                         asdict(state)
-                        if frame_count % DATA_PUBLISH_INTERVAL == 0
+                        if frame_count % DATA_RECORD_INTERVAL == 0
                         else None,
                     )
 
@@ -253,11 +233,7 @@ async def run_match(
                         ex=60,
                     )
                     last_heartbeat = now
-
-                # Frame pacing: sleep for remaining batch budget
-                elapsed = time.monotonic() - batch_start
-                if elapsed < BATCH_BUDGET:
-                    await asyncio.sleep(BATCH_BUDGET - elapsed)
+            # No sleep — run at max speed
 
         # Step 5: Post-loop handling
         if not match_result:

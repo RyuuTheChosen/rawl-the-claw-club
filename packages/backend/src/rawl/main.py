@@ -80,11 +80,13 @@ def create_app() -> FastAPI:
     from rawl.api.router import api_router
     from rawl.gateway.router import gateway_router
     from rawl.ws.broadcaster import ws_router
+    from rawl.ws.replay_streamer import replay_router
     from rawl.ws.training_ws import training_ws_router
 
     app.include_router(api_router, prefix="/api")
     app.include_router(gateway_router, prefix="/api/gateway")
     app.include_router(ws_router, prefix="/ws")
+    app.include_router(replay_router, prefix="/ws")
     app.include_router(training_ws_router, prefix="/ws/gateway")
 
     return app

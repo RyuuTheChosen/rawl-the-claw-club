@@ -16,6 +16,7 @@ export interface Match {
   starts_at: string | null;
   locked_at: string | null;
   resolved_at: string | null;
+  replay_s3_key: string | null;
 }
 
 export interface MatchDataMessage {
