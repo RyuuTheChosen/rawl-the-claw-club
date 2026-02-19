@@ -29,6 +29,8 @@ export function useLiveStream(
   const [ended, setEnded] = useState(false);
   const mountedRef = useRef(true);
   const decoderRef = useRef<VideoDecoder | null>(null);
+  // Buffer SPS+PPS NAL data to prepend to next keyframe (Annex B spec requirement)
+  const spsPpsRef = useRef<Uint8Array | null>(null);
 
   const webCodecsSupported = typeof window !== "undefined" && "VideoDecoder" in window;
 
@@ -59,10 +61,14 @@ export function useLiveStream(
       },
     });
 
+    // W3C AVC codec registration: use avc1 + avc.format="annexb" for Annex B NALs.
+    // Omit description to signal Annex B format (SPS/PPS inline in bitstream).
+    // See: https://www.w3.org/TR/webcodecs-avc-codec-registration/
     decoder.configure({
-      codec: "avc3.42001f", // Baseline profile, level 3.1 — avc3 = Annex B NAL format
+      codec: "avc1.42001f", // Baseline profile, level 3.1
       optimizeForLatency: true,
-    });
+      avc: { format: "annexb" },
+    } as VideoDecoderConfig);
 
     decoderRef.current = decoder;
 
@@ -72,6 +78,7 @@ export function useLiveStream(
         decoder.close();
       }
       decoderRef.current = null;
+      spsPpsRef.current = null;
     };
   }, [isLive, webCodecsSupported, canvasRef]);
 
@@ -97,15 +104,34 @@ export function useLiveStream(
 
       const nalData = new Uint8Array(buf, HEADER_SIZE);
 
-      // Map type to EncodedVideoChunk type
-      const chunkType: EncodedVideoChunkType =
-        type === TYPE_SEQ_HEADER || type === TYPE_KEYFRAME ? "key" : "delta";
+      // Buffer SPS+PPS sequence header — don't feed to decoder standalone.
+      // Per W3C spec, Annex B key chunks must contain "both a primary coded picture
+      // (IDR) and all parameter sets necessary to decode" in a single chunk.
+      if (type === TYPE_SEQ_HEADER) {
+        spsPpsRef.current = new Uint8Array(nalData);
+        return;
+      }
 
       try {
+        let chunkData: Uint8Array;
+
+        if (type === TYPE_KEYFRAME && spsPpsRef.current) {
+          // Prepend SPS+PPS to keyframe IDR to form a complete Annex B access unit
+          const combined = new Uint8Array(spsPpsRef.current.length + nalData.length);
+          combined.set(spsPpsRef.current, 0);
+          combined.set(nalData, spsPpsRef.current.length);
+          chunkData = combined;
+        } else {
+          chunkData = nalData;
+        }
+
+        const chunkType: EncodedVideoChunkType =
+          type === TYPE_KEYFRAME ? "key" : "delta";
+
         const chunk = new EncodedVideoChunk({
           type: chunkType,
           timestamp: timestampUs,
-          data: nalData,
+          data: chunkData,
         });
         decoder.decode(chunk);
       } catch {
