@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { HealthBar } from "@/components/HealthBar";
 import { RoundIndicator } from "@/components/RoundIndicator";
-import { VsScreen } from "@/components/VsScreen";
 
 // --- Simulation engine (pure logic, no React) ---
 
@@ -44,7 +43,6 @@ function stepSimulation(state: SimState): SimState {
 
   if (next.phase === "round_end") {
     if (next.phaseTimer <= 0) {
-      // Check for match end
       if (next.winsA >= 2 || next.winsB >= 2) {
         next.phase = "match_end";
         next.phaseTimer = 30; // 3s
@@ -66,18 +64,15 @@ function stepSimulation(state: SimState): SimState {
   }
 
   // Fighting phase
-  // Decrement timer every 10 ticks (1s)
   if (next.phaseTimer % 10 === 0 && next.phaseTimer !== 0) {
     next.timer = Math.max(0, next.timer - 1);
   }
 
-  // Random damage each tick
   const dmgA = 0.02 + Math.random() * 0.04;
   const dmgB = 0.02 + Math.random() * 0.04;
   next.healthA = Math.max(0, next.healthA - dmgA);
   next.healthB = Math.max(0, next.healthB - dmgB);
 
-  // Check round end
   let roundWinner: "a" | "b" | null = null;
   if (next.healthA <= 0) roundWinner = "b";
   else if (next.healthB <= 0) roundWinner = "a";
@@ -117,93 +112,128 @@ export function AnimatedMatchPreview() {
     };
   }, [reducedMotion]);
 
+  // Shared container — fixed height so all phases are consistent
+  const containerClass =
+    "arcade-border crt-screen relative mx-auto mt-6 w-full max-w-sm h-[160px] flex flex-col items-center justify-center bg-background/50 px-5 py-4 overflow-hidden";
+
   if (reducedMotion) {
     return (
-      <div className="arcade-border crt-screen relative mx-auto mt-6 max-w-lg aspect-[4/3] flex flex-col items-center justify-center gap-3 bg-background/50 p-4">
-        <div className="w-full max-w-xs">
-          <HealthBar health={0.6} side="left" label="P1" />
-        </div>
-        <RoundIndicator totalRounds={3} winsNeeded={2} winsA={0} winsB={0} />
-        <div className="w-full max-w-xs">
-          <HealthBar health={0.6} side="right" label="P2" />
-        </div>
-        <span className="font-mono text-xs text-muted-foreground">45</span>
+      <div className={containerClass}>
+        <HUD healthA={0.6} healthB={0.6} timer={45} winsA={0} winsB={0} />
       </div>
     );
   }
 
   return (
-    <div className="arcade-border crt-screen relative mx-auto mt-6 max-w-lg aspect-[4/3] flex flex-col items-center justify-center bg-background/50 p-4 overflow-hidden">
-      {state.phase === "intro" && (
-        <VsScreen fighterA="PLAYER 1" fighterB="PLAYER 2" />
-      )}
+    <div className={containerClass}>
+      {/* HUD is always visible — gives consistent layout */}
+      <HUD
+        healthA={state.phase === "intro" ? 1.0 : state.healthA}
+        healthB={state.phase === "intro" ? 1.0 : state.healthB}
+        timer={state.phase === "intro" ? 60 : state.timer}
+        winsA={state.winsA}
+        winsB={state.winsB}
+      />
 
-      {state.phase !== "intro" && (
-        <div className="flex w-full flex-col items-center gap-3">
-          {/* Health bars */}
-          <div className="flex w-full items-center gap-3">
-            <div className="flex-1">
-              <HealthBar health={state.healthA} side="left" label="P1" />
-            </div>
-            <span className="font-mono text-xs text-muted-foreground tabular-nums">
-              {state.timer}
-            </span>
-            <div className="flex-1">
-              <HealthBar health={state.healthB} side="right" label="P2" />
-            </div>
-          </div>
-
-          {/* Round indicator */}
-          <RoundIndicator
-            totalRounds={3}
-            winsNeeded={2}
-            winsA={state.winsA}
-            winsB={state.winsB}
-          />
-
-          {/* Match end overlay */}
-          {state.phase === "match_end" && (
+      {/* Center area — phase-specific content */}
+      <div className="flex h-10 items-center justify-center">
+        <AnimatePresence mode="wait">
+          {state.phase === "intro" && (
             <motion.div
-              initial={{ scale: 2, opacity: 0 }}
+              key="vs"
+              initial={{ scale: 3, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="font-pixel text-xl text-neon-orange text-glow-orange"
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+              className="font-pixel text-lg text-neon-orange text-glow-orange"
             >
-              {state.winsA >= 2 ? "P1 WINS" : "P2 WINS"}
+              VS
             </motion.div>
           )}
-
-          {/* Fighting area placeholder */}
           {state.phase === "fighting" && (
-            <div className="flex items-center justify-center gap-12 py-4">
-              <motion.div
-                animate={{ x: [0, 4, -4, 0] }}
-                transition={{ repeat: Infinity, duration: 0.5 }}
-                className="font-pixel text-sm text-neon-cyan text-glow-cyan"
+            <motion.div
+              key="fight"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-10"
+            >
+              <motion.span
+                animate={{ x: [0, 3, -3, 0] }}
+                transition={{ repeat: Infinity, duration: 0.4 }}
+                className="font-pixel text-xs text-neon-cyan text-glow-cyan"
               >
                 P1
-              </motion.div>
-              <motion.div
-                animate={{ x: [0, -4, 4, 0] }}
-                transition={{ repeat: Infinity, duration: 0.5 }}
-                className="font-pixel text-sm text-neon-pink text-glow-pink"
+              </motion.span>
+              <motion.span
+                animate={{ x: [0, -3, 3, 0] }}
+                transition={{ repeat: Infinity, duration: 0.4 }}
+                className="font-pixel text-xs text-neon-pink text-glow-pink"
               >
                 P2
-              </motion.div>
-            </div>
+              </motion.span>
+            </motion.div>
           )}
-
-          {/* Round end */}
           {state.phase === "round_end" && (
             <motion.div
-              initial={{ scale: 1.5, opacity: 0 }}
+              key="ko"
+              initial={{ scale: 2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="font-pixel text-base text-neon-orange"
+              exit={{ opacity: 0 }}
+              className="font-pixel text-base text-neon-red text-glow-orange"
             >
               KO
             </motion.div>
           )}
+          {state.phase === "match_end" && (
+            <motion.div
+              key="win"
+              initial={{ scale: 2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="font-pixel text-sm text-neon-orange text-glow-orange"
+            >
+              {state.winsA >= 2 ? "P1 WINS" : "P2 WINS"}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+/** Always-visible HUD: health bars + timer + round dots */
+function HUD({
+  healthA,
+  healthB,
+  timer,
+  winsA,
+  winsB,
+}: {
+  healthA: number;
+  healthB: number;
+  timer: number;
+  winsA: number;
+  winsB: number;
+}) {
+  return (
+    <div className="flex w-full flex-col items-center gap-2">
+      {/* Health bars + timer */}
+      <div className="flex w-full items-center gap-2">
+        <span className="font-pixel text-[9px] text-neon-cyan shrink-0">P1</span>
+        <div className="flex-1">
+          <HealthBar health={healthA} side="left" />
         </div>
-      )}
+        <span className="font-mono text-xs text-muted-foreground tabular-nums w-6 text-center shrink-0">
+          {timer}
+        </span>
+        <div className="flex-1">
+          <HealthBar health={healthB} side="right" />
+        </div>
+        <span className="font-pixel text-[9px] text-neon-pink shrink-0">P2</span>
+      </div>
+      {/* Round indicator */}
+      <RoundIndicator totalRounds={3} winsNeeded={2} winsA={winsA} winsB={winsB} />
     </div>
   );
 }
