@@ -207,11 +207,13 @@ class H264Encoder:
                 await self._publish_tag(tag, stream_key, sps_pps_key)
         except FLVDemuxError as e:
             logger.error(
-                "FLV demux error",
-                extra={"match_id": self._match_id, "error": str(e)},
+                "FLV demux error [%s]: %s", self._match_id, e,
             )
-        except asyncio.IncompleteReadError:
-            logger.debug("FFmpeg stdout EOF", extra={"match_id": self._match_id})
+        except asyncio.IncompleteReadError as e:
+            logger.warning(
+                "FFmpeg stdout EOF [%s]: partial=%d expected=%d",
+                self._match_id, len(e.partial), e.expected,
+            )
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -273,17 +275,8 @@ class H264Encoder:
                 text = line.decode(errors="replace").rstrip()
                 if not text:
                     continue
-                # FFmpeg emits a lot of info-level output; only log warnings/errors
-                if any(kw in text.lower() for kw in ("error", "fatal", "failed", "invalid")):
-                    logger.warning(
-                        "FFmpeg stderr",
-                        extra={"match_id": self._match_id, "line": text},
-                    )
-                else:
-                    logger.debug(
-                        "FFmpeg stderr",
-                        extra={"match_id": self._match_id, "line": text},
-                    )
+                # Log ALL FFmpeg stderr at warning level so it's visible in Railway
+                logger.warning("FFmpeg [%s]: %s", self._match_id, text)
         except asyncio.CancelledError:
             raise
         except Exception:
