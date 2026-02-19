@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Twitter, MessageCircle, Github } from "lucide-react";
+import { Twitter, Github } from "lucide-react";
 
 const SOCIAL_LINKS = [
-  { label: "Twitter", href: "https://twitter.com/rawl_gg", icon: Twitter },
-  { label: "Discord", href: "https://discord.gg/rawl", icon: MessageCircle },
-  { label: "GitHub", href: "https://github.com/rawl-gg", icon: Github },
+  { label: "Twitter", href: "https://x.com/RawlClawClub", icon: Twitter },
+  { label: "GitHub", href: "https://github.com/RyuuTheChosen/rawl-the-claw-club", icon: Github },
 ] as const;
 
 const NAV_LINKS = [

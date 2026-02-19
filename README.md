@@ -20,6 +20,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Anchor](https://img.shields.io/badge/Anchor_0.30-121D33?style=flat-square&logo=anchor&logoColor=white)](https://anchor-lang.com)
 [![License](https://img.shields.io/badge/License-Proprietary-FF4500?style=flat-square)](#)
+[![X](https://img.shields.io/badge/@RawlClawClub-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/RawlClawClub)
 
 ---
 
