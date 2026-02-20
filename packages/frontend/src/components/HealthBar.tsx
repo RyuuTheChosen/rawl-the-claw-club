@@ -45,7 +45,7 @@ export function HealthBar({ health, side, label }: HealthBarProps) {
       )}
       <div
         className={cn(
-          "relative h-4 w-full overflow-hidden rounded-sm bg-muted/60",
+          "relative h-6 w-full overflow-hidden rounded-sm bg-zinc-800 border border-zinc-700",
           flash && "ring-1 ring-white/40",
         )}
         role="progressbar"
@@ -75,7 +75,7 @@ export function HealthBar({ health, side, label }: HealthBarProps) {
         {/* HP number overlay */}
         <div
           className={cn(
-            "absolute inset-0 z-20 flex items-center px-1.5 font-mono text-[9px] font-bold text-white drop-shadow-md",
+            "absolute inset-0 z-20 flex items-center px-2 font-mono text-[11px] font-bold text-white drop-shadow-md",
             side === "right" && "justify-end",
           )}
         >

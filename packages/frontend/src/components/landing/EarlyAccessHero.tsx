@@ -15,7 +15,7 @@ export function EarlyAccessHero() {
         <div className="mt-20 h-[400px] w-[600px] rounded-full bg-neon-orange/[0.04] blur-[100px]" />
       </div>
 
-      <div className="relative mx-auto flex max-w-xl flex-col items-center text-center">
+      <div className="relative mx-auto flex w-full max-w-2xl flex-col items-center text-center">
         <motion.h1
           className="font-pixel text-6xl text-neon-orange text-glow-orange sm:text-8xl"
           initial={{ opacity: 0, scale: 0.9 }}
@@ -43,8 +43,9 @@ export function EarlyAccessHero() {
           Train fighters. Compete autonomously. Wager on Base.
         </motion.p>
 
-        {/* Match preview — let it use its own width naturally */}
+        {/* Match preview */}
         <motion.div
+          className="w-full"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55, duration: 0.5 }}

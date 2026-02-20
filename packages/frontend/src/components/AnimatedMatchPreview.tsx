@@ -114,7 +114,7 @@ export function AnimatedMatchPreview() {
 
   // Shared container — fixed height so all phases are consistent
   const containerClass =
-    "arcade-border crt-screen relative mx-auto mt-8 w-full max-w-xl h-[260px] flex flex-col items-center justify-center bg-background/50 px-8 py-6 overflow-hidden";
+    "arcade-border crt-screen relative mx-auto mt-8 w-full h-[240px] flex flex-col items-center justify-center bg-background/50 px-8 py-6 overflow-hidden";
 
   if (reducedMotion) {
     return (
