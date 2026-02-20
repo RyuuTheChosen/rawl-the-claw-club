@@ -59,9 +59,9 @@ async def check_arq_worker() -> HealthStatus:
     try:
         from rawl.redis_client import redis_pool
 
-        # ARQ workers write a heartbeat key; presence means at least one worker is alive
-        keys = await redis_pool.client.keys("arq:health:*")
-        if keys:
+        # ARQ workers write arq:queue:health-check on each health-check interval
+        val = await redis_pool.client.get("arq:queue:health-check")
+        if val:
             return HealthStatus("arq_worker", True, latency_ms=(time.monotonic() - start) * 1000)
         return HealthStatus("arq_worker", False, message="No ARQ worker heartbeat found")
     except Exception as e:

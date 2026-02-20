@@ -55,8 +55,8 @@ def main() -> None:
 
     print("Done.")
     print()
-    print("IMPORTANT: Models uploaded in raw format. Run normalization on Railway:")
-    print("  celery -A rawl.celery_app call rawl.engine.tasks.normalize_pretrained_models")
+    print("IMPORTANT: Models uploaded in raw format. Trigger normalization via ARQ:")
+    print("  arq rawl.arq_app.WorkerSettings  # then enqueue normalize_pretrained_models")
 
 
 if __name__ == "__main__":
