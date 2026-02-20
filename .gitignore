@@ -26,6 +26,7 @@ target/
 packages/contracts/cache/
 packages/contracts/out/
 packages/contracts/lib/
+packages/contracts/broadcast/
 
 # IDE
 .vscode/
@@ -46,12 +47,11 @@ Thumbs.db
 # Claude Code local settings
 .claude/
 
-# Markdown docs (keep docs/ and README, ignore stray .md in root)
+# Markdown docs (keep README and CLAUDE.md, ignore everything else)
 *.md
 !README.md
 !CLAUDE.md
-!docs/
-!docs/**/*.md
+docs/
 
 # Testing
 .coverage
