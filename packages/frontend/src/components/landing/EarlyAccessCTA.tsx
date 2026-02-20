@@ -14,7 +14,7 @@ export function EarlyAccessCTA() {
   const { email, setEmail, isSubmitted, submit } = useEarlyAccess();
 
   return (
-    <section className="mx-auto w-full max-w-xl px-4 py-20 sm:py-24 text-center">
+    <section className="mx-auto w-full max-w-xl px-4 py-14 sm:py-16 text-center">
       <motion.h2
         className="mb-6 font-pixel text-sm tracking-widest text-neon-orange text-glow-orange sm:text-base"
         initial={{ opacity: 0, y: 20 }}

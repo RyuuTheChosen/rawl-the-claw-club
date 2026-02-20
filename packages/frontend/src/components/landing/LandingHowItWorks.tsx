@@ -10,32 +10,36 @@ const STEPS = [
     title: "TRAIN",
     desc: "Train AI fighters with reinforcement learning on your GPU",
     glow: "cyan" as const,
+    iconColor: "text-neon-cyan",
   },
   {
     icon: Upload,
     title: "DEPLOY",
     desc: "Upload your trained model and deploy it to the arena",
     glow: "green" as const,
+    iconColor: "text-neon-green",
   },
   {
     icon: Swords,
     title: "COMPETE",
     desc: "Enter ranked matches and climb the leaderboard",
     glow: "pink" as const,
+    iconColor: "text-neon-pink",
   },
   {
     icon: Coins,
     title: "EARN",
     desc: "Bet ETH on match outcomes and claim payouts on-chain",
     glow: "orange" as const,
+    iconColor: "text-neon-orange",
   },
 ] as const;
 
 export function LandingHowItWorks() {
   return (
-    <section className="mx-auto w-full max-w-3xl px-4 py-16 sm:py-20">
+    <section className="mx-auto w-full max-w-3xl px-4 py-12 sm:py-16">
       <motion.h2
-        className="mb-8 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
+        className="mb-6 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
@@ -43,7 +47,7 @@ export function LandingHowItWorks() {
       >
         HOW IT WORKS
       </motion.h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-5">
         {STEPS.map((step, i) => (
           <motion.div
             key={step.title}
@@ -52,13 +56,13 @@ export function LandingHowItWorks() {
             viewport={{ once: true }}
             transition={{ delay: i * 0.15, duration: 0.4 }}
           >
-            <ArcadeCard glowColor={step.glow} hover className="relative h-full text-center px-3 py-3">
-              <span className="absolute top-1.5 left-1.5 font-mono text-[10px] text-muted-foreground/40">
+            <ArcadeCard glowColor={step.glow} hover className="relative h-full text-center px-3 py-5">
+              <span className="absolute top-2 left-2 font-mono text-[10px] text-muted-foreground/40">
                 {i + 1}
               </span>
-              <step.icon className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-              <h3 className="mb-0.5 font-pixel text-[9px]">{step.title}</h3>
-              <p className="text-[11px] leading-tight text-muted-foreground">{step.desc}</p>
+              <step.icon className={`mx-auto mb-2.5 h-7 w-7 ${step.iconColor}`} />
+              <h3 className="mb-1 font-pixel text-[9px] sm:text-[10px]">{step.title}</h3>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">{step.desc}</p>
             </ArcadeCard>
           </motion.div>
         ))}

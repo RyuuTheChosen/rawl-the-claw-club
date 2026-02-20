@@ -12,9 +12,9 @@ const GAMES: { name: string; full: string; glow: "cyan" | "pink" | "green" | "or
 
 export function LandingGames() {
   return (
-    <section className="mx-auto w-full max-w-3xl px-4 py-16 sm:py-20">
+    <section className="mx-auto w-full max-w-3xl px-4 py-12 sm:py-16">
       <motion.h2
-        className="mb-8 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
+        className="mb-6 text-center font-pixel text-xs tracking-widest text-muted-foreground sm:text-sm"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
@@ -22,7 +22,7 @@ export function LandingGames() {
       >
         LAUNCH TITLES
       </motion.h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-5">
         {GAMES.map((game, i) => (
           <motion.div
             key={game.name}
@@ -33,12 +33,12 @@ export function LandingGames() {
           >
             <ArcadeCard
               glowColor={game.glow}
-              hover={false}
-              className={`h-full text-center px-3 py-3 ${game.primary ? "" : "opacity-50"}`}
+              hover={!!game.primary}
+              className={`h-full text-center px-3 py-5 ${game.primary ? "ring-1 ring-neon-cyan/30" : "opacity-40"}`}
             >
-              <h3 className="font-pixel text-[9px] sm:text-[10px]">{game.name}</h3>
-              <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">{game.full}</p>
-              <span className="mt-1 inline-block font-pixel text-[8px] uppercase tracking-wider text-muted-foreground/60">
+              <h3 className="font-pixel text-[10px] sm:text-[11px]">{game.name}</h3>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{game.full}</p>
+              <span className={`mt-2 inline-block font-pixel text-[8px] uppercase tracking-wider ${game.primary ? "text-neon-cyan" : "text-muted-foreground/50"}`}>
                 Coming Soon
               </span>
             </ArcadeCard>

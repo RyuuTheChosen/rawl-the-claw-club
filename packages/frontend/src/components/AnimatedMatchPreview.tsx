@@ -114,7 +114,7 @@ export function AnimatedMatchPreview() {
 
   // Shared container — fixed height so all phases are consistent
   const containerClass =
-    "arcade-border crt-screen relative mx-auto mt-6 w-full max-w-sm h-[160px] flex flex-col items-center justify-center bg-background/50 px-5 py-4 overflow-hidden";
+    "arcade-border crt-screen relative mx-auto mt-8 w-full max-w-xl h-[260px] flex flex-col items-center justify-center bg-background/50 px-8 py-6 overflow-hidden";
 
   if (reducedMotion) {
     return (
@@ -136,7 +136,7 @@ export function AnimatedMatchPreview() {
       />
 
       {/* Center area — phase-specific content */}
-      <div className="flex h-10 items-center justify-center">
+      <div className="flex h-14 items-center justify-center">
         <AnimatePresence mode="wait">
           {state.phase === "intro" && (
             <motion.div
@@ -145,7 +145,7 @@ export function AnimatedMatchPreview() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-              className="font-pixel text-lg text-neon-orange text-glow-orange"
+              className="font-pixel text-2xl text-neon-orange text-glow-orange"
             >
               VS
             </motion.div>
@@ -156,19 +156,19 @@ export function AnimatedMatchPreview() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-10"
+              className="flex items-center gap-16"
             >
               <motion.span
-                animate={{ x: [0, 3, -3, 0] }}
+                animate={{ x: [0, 4, -4, 0] }}
                 transition={{ repeat: Infinity, duration: 0.4 }}
-                className="font-pixel text-xs text-neon-cyan text-glow-cyan"
+                className="font-pixel text-sm text-neon-cyan text-glow-cyan"
               >
                 P1
               </motion.span>
               <motion.span
-                animate={{ x: [0, -3, 3, 0] }}
+                animate={{ x: [0, -4, 4, 0] }}
                 transition={{ repeat: Infinity, duration: 0.4 }}
-                className="font-pixel text-xs text-neon-pink text-glow-pink"
+                className="font-pixel text-sm text-neon-pink text-glow-pink"
               >
                 P2
               </motion.span>
@@ -180,7 +180,7 @@ export function AnimatedMatchPreview() {
               initial={{ scale: 2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="font-pixel text-base text-neon-red text-glow-orange"
+              className="font-pixel text-xl text-neon-red text-glow-orange"
             >
               KO
             </motion.div>
@@ -191,7 +191,7 @@ export function AnimatedMatchPreview() {
               initial={{ scale: 2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="font-pixel text-sm text-neon-orange text-glow-orange"
+              className="font-pixel text-lg text-neon-orange text-glow-orange"
             >
               {state.winsA >= 2 ? "P1 WINS" : "P2 WINS"}
             </motion.div>
@@ -217,20 +217,20 @@ function HUD({
   winsB: number;
 }) {
   return (
-    <div className="flex w-full flex-col items-center gap-2">
+    <div className="flex w-full flex-col items-center gap-3">
       {/* Health bars + timer */}
-      <div className="flex w-full items-center gap-2">
-        <span className="font-pixel text-[9px] text-neon-cyan shrink-0">P1</span>
+      <div className="flex w-full items-center gap-3">
+        <span className="font-pixel text-xs text-neon-cyan shrink-0">P1</span>
         <div className="flex-1">
           <HealthBar health={healthA} side="left" />
         </div>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums w-6 text-center shrink-0">
+        <span className="font-mono text-sm text-muted-foreground tabular-nums w-8 text-center shrink-0">
           {timer}
         </span>
         <div className="flex-1">
           <HealthBar health={healthB} side="right" />
         </div>
-        <span className="font-pixel text-[9px] text-neon-pink shrink-0">P2</span>
+        <span className="font-pixel text-xs text-neon-pink shrink-0">P2</span>
       </div>
       {/* Round indicator */}
       <RoundIndicator totalRounds={3} winsNeeded={2} winsA={winsA} winsB={winsB} />

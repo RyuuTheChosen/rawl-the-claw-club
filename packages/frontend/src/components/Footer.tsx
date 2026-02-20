@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Twitter, Github } from "lucide-react";
 
 const SOCIAL_LINKS = [
@@ -16,6 +17,9 @@ const NAV_LINKS = [
 ];
 
 export function Footer() {
+  const pathname = usePathname();
+  const isEarlyAccess = pathname === "/early-access";
+
   return (
     <footer aria-label="Site footer" className="border-t border-border bg-background/60">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-8 sm:flex-row sm:justify-between">
@@ -26,17 +30,19 @@ export function Footer() {
         </div>
 
         {/* Center: nav */}
-        <nav className="flex flex-wrap justify-center gap-4">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        {!isEarlyAccess && (
+          <nav className="flex flex-wrap justify-center gap-4">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        )}
 
         {/* Right: socials */}
         <div className="flex items-center gap-3">
