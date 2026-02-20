@@ -200,21 +200,22 @@ async def create_custom_match(
                 )
                 match.onchain_match_id = str(match.id).replace("-", "")[:32]
                 await db.commit()
-        except Exception as e:
+        except Exception:
             import logging
             logging.getLogger(__name__).exception(
                 "Failed to create on-chain pool",
                 extra={"match_id": str(match.id)},
             )
 
-    # Dispatch match execution
-    from rawl.engine.tasks import execute_match
-    execute_match.delay(
-        str(match.id),
-        fighter_a.game_id,
-        fighter_a.model_path,
-        fighter_b.model_path,
-        body.match_format,
+    # Dispatch match execution immediately (custom match, no betting window)
+    from rawl.engine.emulation_queue import enqueue_ranked_now
+
+    await enqueue_ranked_now(
+        match_id=str(match.id),
+        game_id=fighter_a.game_id,
+        model_a=fighter_a.model_path,
+        model_b=fighter_b.model_path,
+        match_format=body.match_format,
     )
 
     return {

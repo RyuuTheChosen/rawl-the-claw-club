@@ -28,7 +28,7 @@ class RetroEngine(EmulationEngine):
     observation/action/info format and the nested dict format expected by
     game adapters (formerly provided by DIAMBRA).
 
-    One emulator instance per process — Celery prefork workers guarantee this.
+    One emulator instance per process — the emulation worker spawns one Process per match.
     """
 
     def __init__(
@@ -188,7 +188,7 @@ class RetroEngine(EmulationEngine):
         """Download ROM from S3 into stable-retro's data dir if not present.
 
         Uses sync boto3 (not async aioboto3) because this runs inside an
-        already-running asyncio event loop from celery_async_run().
+        already-running asyncio event loop.
         """
         global _rom_provisioned
         if _rom_provisioned:

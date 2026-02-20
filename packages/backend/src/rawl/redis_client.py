@@ -19,7 +19,7 @@ class RedisPool:
     @property
     def client(self) -> aioredis.Redis:
         if self._pool is None:
-            # Auto-initialize for Celery workers (from_url is synchronous)
+            # Auto-initialize on first access (from_url is synchronous)
             self._pool = aioredis.from_url(
                 settings.redis_url,
                 decode_responses=False,
@@ -33,7 +33,7 @@ class RedisPool:
             self._pool = None
 
     def reset(self) -> None:
-        """Drop the cached client without closing (for Celery workers).
+        """Drop the cached client without closing.
 
         The old connection's event loop is dead, so we can't await aclose().
         Just dereference it and let the next .client access create a fresh one

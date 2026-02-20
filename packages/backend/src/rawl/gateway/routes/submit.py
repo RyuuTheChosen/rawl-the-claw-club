@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -24,6 +24,7 @@ SUBMIT_RATE_WINDOW = 3600  # 1 hour in seconds
 
 @router.post("/submit", response_model=FighterResponse, status_code=201)
 async def submit_fighter(
+    request: Request,
     db: DbSession,
     wallet: ApiKeyAuth,
     body: SubmitFighterRequest,
@@ -67,9 +68,10 @@ async def submit_fighter(
     await db.commit()
     await db.refresh(fighter)
 
-    # Kick off async validation (Celery task)
-    from rawl.training.validation import validate_model
-    validate_model.delay(str(fighter.id), body.model_s3_key)
+    # Kick off async validation via ARQ
+    await request.app.state.arq_pool.enqueue_job(
+        "validate_model", str(fighter.id), body.model_s3_key
+    )
 
     return FighterResponse(
         id=fighter.id,

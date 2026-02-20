@@ -71,10 +71,9 @@ class EVMClient:
         self._initialized = False
 
     def reset(self) -> None:
-        """SYNC — drop refs for Celery loop reset (CANNOT be async).
+        """SYNC — drop refs without awaiting close (for subprocess workers).
 
-        Called before asyncio.run() in Celery tasks because the old event
-        loop is dead and we can't await close().
+        Called before asyncio.run() when the old event loop is dead.
         """
         self._w3 = None
         self._contract = None
@@ -82,7 +81,7 @@ class EVMClient:
         self._initialized = False
 
     async def _ensure_initialized(self) -> None:
-        """Lazy-init for Celery workers (no lifespan)."""
+        """Lazy-init for workers without a lifespan."""
         if not self._initialized:
             await self.initialize()
 

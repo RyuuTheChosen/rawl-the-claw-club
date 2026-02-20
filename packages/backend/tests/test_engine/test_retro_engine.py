@@ -16,21 +16,21 @@ def engine():
 
 @pytest.fixture
 def mock_retro():
-    """Inject a mock ``retro`` module into sys.modules.
+    """Inject a mock ``stable_retro`` module into sys.modules.
 
-    retro_engine.py imports ``retro`` lazily inside start(), so we
-    need to place the mock in sys.modules before start() runs.
+    retro_engine.py imports ``stable_retro as retro`` lazily inside start(),
+    so we need to place the mock in sys.modules before start() runs.
     """
     mock_mod = MagicMock()
     mock_mod.Actions.FILTERED = "FILTERED"
     mock_mod.data.Integrations.ALL = "ALL"
-    saved = sys.modules.get("retro")
-    sys.modules["retro"] = mock_mod
+    saved = sys.modules.get("stable_retro")
+    sys.modules["stable_retro"] = mock_mod
     yield mock_mod
     if saved is None:
-        sys.modules.pop("retro", None)
+        sys.modules.pop("stable_retro", None)
     else:
-        sys.modules["retro"] = saved
+        sys.modules["stable_retro"] = saved
 
 
 # ------------------------------------------------------------------
@@ -46,10 +46,12 @@ class TestTranslateObs:
         assert result["P1"].shape == (256, 256, 3)
         assert result["P2"].shape == (256, 256, 3)
 
-    def test_p1_and_p2_share_same_frame(self, engine):
+    def test_p2_is_horizontally_flipped(self, engine):
         raw = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
         result = engine._translate_obs(raw)
-        np.testing.assert_array_equal(result["P1"], result["P2"])
+        import cv2
+        expected_p2 = cv2.flip(result["P1"], 1)
+        np.testing.assert_array_equal(result["P2"], expected_p2)
 
     def test_custom_obs_size(self):
         eng = RetroEngine(game_id="sf2ce", match_id="test")
@@ -247,7 +249,8 @@ class TestAdapterCompatibility:
 # ------------------------------------------------------------------
 
 class TestLifecycle:
-    def test_start_creates_env_and_returns_translated(self, engine, mock_retro):
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_start_creates_env_and_returns_translated(self, _mock_rom, engine, mock_retro):
         mock_env = MagicMock()
         mock_env.reset.return_value = (
             np.zeros((200, 256, 3), dtype=np.uint8),
@@ -263,7 +266,8 @@ class TestLifecycle:
         assert info["P1"]["health"] == 176
         assert info["timer"] == 99
 
-    def test_start_uses_filtered_actions(self, engine, mock_retro):
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_start_uses_filtered_actions(self, _mock_rom, engine, mock_retro):
         mock_env = MagicMock()
         mock_env.reset.return_value = (
             np.zeros((200, 256, 3), dtype=np.uint8),
@@ -276,7 +280,8 @@ class TestLifecycle:
         call_kwargs = mock_retro.make.call_args
         assert call_kwargs[1]["use_restricted_actions"] == "FILTERED"
 
-    def test_step_translates_round_trip(self, engine, mock_retro):
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_step_translates_round_trip(self, _mock_rom, engine, mock_retro):
         mock_env = MagicMock()
         mock_env.reset.return_value = (
             np.zeros((200, 256, 3), dtype=np.uint8),
@@ -307,7 +312,8 @@ class TestLifecycle:
         with pytest.raises(RuntimeError, match="not started"):
             engine.step({"P1": np.array([0, 0, 0]), "P2": np.array([0, 0, 0])})
 
-    def test_stop_closes_env(self, engine, mock_retro):
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_stop_closes_env(self, _mock_rom, engine, mock_retro):
         mock_env = MagicMock()
         mock_env.reset.return_value = (
             np.zeros((200, 256, 3), dtype=np.uint8),

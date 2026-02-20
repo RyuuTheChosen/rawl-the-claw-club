@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
+# Resolve monorepo root .env: config.py → rawl/ → src/ → backend/ → packages/ → Rawl/
+_ROOT_DIR = Path(__file__).resolve().parents[4]
+_ROOT_ENV = _ROOT_DIR / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": str(_ROOT_ENV) if _ROOT_ENV.is_file() else ".env",
+        "env_file_encoding": "utf-8",
+    }
 
     # Database
     database_url: str = "postgresql+asyncpg://rawl:rawl@localhost:5432/rawl"

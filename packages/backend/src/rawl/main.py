@@ -35,14 +35,21 @@ class _CORSMiddleware(CORSMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     setup_logging()
-    # Startup: initialize connections
+    from arq.connections import RedisSettings as ArqRedisSettings
+    from arq.connections import create_pool
+
     from rawl.db.session import engine
-    from rawl.redis_client import redis_pool
     from rawl.evm.client import evm_client
     from rawl.evm.event_listener import event_listener
+    from rawl.redis_client import redis_pool
 
     await redis_pool.initialize()
     await evm_client.initialize()
+
+    # ARQ pool for dispatching enqueued tasks (validate_model, run_training, etc.)
+    app.state.arq_pool = await create_pool(
+        ArqRedisSettings.from_dsn(settings.redis_url)
+    )
 
     # Start event listener as background task
     listener_task = asyncio.create_task(event_listener.start())
@@ -52,6 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Shutdown: close connections
     await event_listener.stop()
     listener_task.cancel()
+    await app.state.arq_pool.close()
     await evm_client.close()
     await redis_pool.close()
     await engine.dispose()

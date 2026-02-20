@@ -53,19 +53,19 @@ async def check_s3() -> HealthStatus:
         return HealthStatus("s3", False, message=str(e))
 
 
-async def check_celery() -> HealthStatus:
-    """Verify Celery broker is reachable via a ping."""
+async def check_arq_worker() -> HealthStatus:
+    """Verify ARQ worker is reachable by checking its Redis heartbeat key."""
     start = time.monotonic()
     try:
-        from rawl.celery_app import celery
+        from rawl.redis_client import redis_pool
 
-        inspector = celery.control.inspect(timeout=2.0)
-        pong = inspector.ping()
-        if pong:
-            return HealthStatus("celery", True, latency_ms=(time.monotonic() - start) * 1000)
-        return HealthStatus("celery", False, message="No workers responded to ping")
+        # ARQ workers write a heartbeat key; presence means at least one worker is alive
+        keys = await redis_pool.client.keys("arq:health:*")
+        if keys:
+            return HealthStatus("arq_worker", True, latency_ms=(time.monotonic() - start) * 1000)
+        return HealthStatus("arq_worker", False, message="No ARQ worker heartbeat found")
     except Exception as e:
-        return HealthStatus("celery", False, message=str(e))
+        return HealthStatus("arq_worker", False, message=str(e))
 
 
 async def check_base_rpc() -> HealthStatus:
@@ -154,7 +154,7 @@ async def get_all_health() -> list[HealthStatus]:
         check_database,
         check_redis,
         check_s3,
-        check_celery,
+        check_arq_worker,
         check_base_rpc,
         check_retro,
         check_match_queue,

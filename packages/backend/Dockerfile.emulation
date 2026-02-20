@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CPU-only PyTorch first (saves ~5GB vs CUDA version — no GPU on Railway)
+# CPU-only PyTorch (~800MB vs ~4GB CUDA)
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install remaining dependencies (cached unless pyproject.toml changes)
@@ -18,10 +18,6 @@ RUN mkdir -p src/rawl && touch src/rawl/__init__.py \
     && pip install --no-cache-dir ".[emulation]" \
     && rm -rf src/rawl
 
-# FFmpeg for live H.264 streaming (separate layer to avoid cache issues)
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy actual source and reinstall (fast — deps already cached)
 COPY src/ src/
 RUN pip install --no-cache-dir --no-deps .
@@ -29,4 +25,4 @@ RUN pip install --no-cache-dir --no-deps .
 # ROM must be provided at runtime via volume mount or S3 fetch:
 # -v /path/to/rom.md:<site-packages>/retro/data/stable/StreetFighterIISpecialChampionEdition-Genesis-v0/rom.md
 
-CMD ["arq", "rawl.arq_app.WorkerSettings"]
+CMD ["python", "-m", "rawl.engine.emulation_worker"]

@@ -1,40 +1,11 @@
-"""Celery Beat task that pairs queued fighters and dispatches matches."""
+"""ARQ cron task that pairs queued fighters and dispatches matches."""
 from __future__ import annotations
 
 import logging
 
-from celery.exceptions import Ignore
-
-from rawl.celery_app import celery, celery_async_run, get_sync_redis
 from rawl.config import settings
 
 logger = logging.getLogger(__name__)
-
-
-@celery.task(name="rawl.services.match_scheduler.schedule_pending_matches")
-def schedule_pending_matches():
-    """Celery Beat task: attempt to pair queued fighters.
-
-    Skips entirely (via sync Redis check) when no fighters are queued,
-    avoiding the overhead of asyncio.run() + DB connections.
-    """
-    r = get_sync_redis()
-    # Quick check: any matchqueue:* keys exist? (excludes matchqueue:meta:* keys)
-    cursor, keys = r.scan(cursor=0, match="matchqueue:*", count=100)
-    has_queue_keys = any(
-        not k.startswith("matchqueue:meta:") for k in keys
-    )
-    if not has_queue_keys:
-        # Scan may need more iterations, but first batch empty = very likely nothing queued
-        while cursor and not has_queue_keys:
-            cursor, keys = r.scan(cursor=cursor, match="matchqueue:*", count=100)
-            has_queue_keys = any(
-                not k.startswith("matchqueue:meta:") for k in keys
-            )
-    if not has_queue_keys:
-        raise Ignore()
-
-    celery_async_run(_schedule_async())
 
 
 async def _schedule_async():
@@ -44,6 +15,7 @@ async def _schedule_async():
 
     from rawl.db.models.fighter import Fighter
     from rawl.db.session import worker_session_factory
+    from rawl.engine.emulation_queue import enqueue_ranked
     from rawl.services.match_queue import get_active_game_ids, try_match, widen_windows
 
     async with worker_session_factory() as db:
@@ -109,18 +81,14 @@ async def _schedule_async():
                         )
                         continue
 
-                # Dispatch match execution after betting delay
-                from rawl.engine.tasks import execute_match
-
-                execute_match.apply_async(
-                    args=[
-                        str(match.id),
-                        game_id,
-                        fighter_a.model_path,
-                        fighter_b.model_path,
-                        settings.default_match_format,
-                    ],
-                    countdown=delay,
+                # Enqueue match execution after the betting window
+                await enqueue_ranked(
+                    match_id=str(match.id),
+                    game_id=game_id,
+                    model_a=fighter_a.model_path,
+                    model_b=fighter_b.model_path,
+                    match_format=settings.default_match_format,
+                    delay_seconds=delay,
                 )
             else:
                 # No pair found — widen Elo windows for next tick

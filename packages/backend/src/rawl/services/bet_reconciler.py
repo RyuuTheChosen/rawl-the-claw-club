@@ -1,4 +1,4 @@
-"""Celery Beat tasks for bet reconciliation and stale match timeout.
+"""ARQ cron tasks for bet reconciliation and stale match timeout.
 
 reconcile_bets (every 60s):
   - Syncs DB bet status with on-chain contract state for confirmed bets on
@@ -13,27 +13,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from celery.exceptions import Ignore
-
-from rawl.celery_app import celery, celery_async_run, get_sync_redis
-
 logger = logging.getLogger(__name__)
 
 RECONCILE_BATCH_SIZE = 50
 PENDING_EXPIRY_SECONDS = 3600  # 1 hour
 LOCK_TIMEOUT_SECONDS = 1800  # 30 minutes
-
-
-@celery.task(name="rawl.services.bet_reconciler.reconcile_bets")
-def reconcile_bets():
-    """Reconcile confirmed bets on finished matches with on-chain state."""
-    celery_async_run(_reconcile_bets_async())
-
-
-@celery.task(name="rawl.services.bet_reconciler.timeout_stale_matches")
-def timeout_stale_matches():
-    """Timeout matches stuck in locked state beyond the threshold."""
-    celery_async_run(_timeout_stale_matches_async())
 
 
 async def _reconcile_bets_async():

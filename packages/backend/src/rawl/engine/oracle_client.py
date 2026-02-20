@@ -7,6 +7,8 @@ from rawl.config import settings
 
 logger = logging.getLogger(__name__)
 
+SETTLE_TIMEOUT = 60  # seconds; covers 3 retries + backoffs [1,2,4]s with headroom
+
 
 class OracleClient:
     """Client for submitting match results to Base smart contract.
@@ -17,14 +19,14 @@ class OracleClient:
 
     async def submit_lock(self, match_id: str) -> str | None:
         """Submit lock_match transaction. Returns tx hash or None on failure."""
-        from rawl.evm.client import evm_client
-
-        logger.info("Submitting lock_match", extra={"match_id": match_id})
-        return await self._retry(
-            lambda: evm_client.lock_match_on_chain(match_id),
-            "lock_match",
-            match_id,
-        )
+        try:
+            return await asyncio.wait_for(
+                self._submit_lock_inner(match_id),
+                timeout=SETTLE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error("lockMatch RPC timed out", extra={"match_id": match_id})
+            return None
 
     async def submit_resolve(self, match_id: str, winner: str, match_hash: str) -> str | None:
         """Submit resolve_match transaction.
@@ -34,6 +36,39 @@ class OracleClient:
             winner: "P1" or "P2"
             match_hash: SHA-256 hex string of match result (log-only, not passed to chain)
         """
+        try:
+            return await asyncio.wait_for(
+                self._submit_resolve_inner(match_id, winner, match_hash),
+                timeout=SETTLE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error("resolveMatch RPC timed out", extra={"match_id": match_id})
+            return None
+
+    async def submit_cancel(self, match_id: str, reason: str = "engine_failure") -> str | None:
+        """Submit cancel_match transaction. Returns tx hash or None on failure."""
+        try:
+            return await asyncio.wait_for(
+                self._submit_cancel_inner(match_id, reason),
+                timeout=SETTLE_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error("cancelMatch RPC timed out", extra={"match_id": match_id})
+            return None
+
+    async def _submit_lock_inner(self, match_id: str) -> str | None:
+        from rawl.evm.client import evm_client
+
+        logger.info("Submitting lock_match", extra={"match_id": match_id})
+        return await self._retry(
+            lambda: evm_client.lock_match_on_chain(match_id),
+            "lock_match",
+            match_id,
+        )
+
+    async def _submit_resolve_inner(
+        self, match_id: str, winner: str, match_hash: str
+    ) -> str | None:
         from rawl.evm.client import evm_client
 
         # Convert "P1"/"P2" to contract u8 (0=SideA, 1=SideB)
@@ -49,8 +84,7 @@ class OracleClient:
             match_id,
         )
 
-    async def submit_cancel(self, match_id: str, reason: str = "engine_failure") -> str | None:
-        """Submit cancel_match transaction. Returns tx hash or None on failure."""
+    async def _submit_cancel_inner(self, match_id: str, reason: str) -> str | None:
         from rawl.evm.client import evm_client
 
         logger.info(

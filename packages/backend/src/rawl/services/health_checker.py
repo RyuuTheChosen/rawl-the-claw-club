@@ -3,23 +3,10 @@ from __future__ import annotations
 import logging
 import time
 
-from rawl.celery_app import celery, celery_async_run
-
 logger = logging.getLogger(__name__)
 
 # If no heartbeat for this many seconds, match runner is declared dead
 HEARTBEAT_TIMEOUT = 60
-
-
-@celery.task(name="rawl.services.health_checker.check_match_heartbeats")
-def check_match_heartbeats():
-    """Celery Beat task: runs every 30 seconds.
-
-    Checks Redis heartbeat timestamps for all active Match Runners.
-    If no heartbeat for 60 seconds -> declared dead.
-    Also catches matches where the engine never started (no heartbeat key at all).
-    """
-    celery_async_run(_check_heartbeats_async())
 
 
 async def _check_heartbeats_async():
@@ -79,7 +66,7 @@ async def _check_heartbeats_async():
                 try:
                     await oracle_client.submit_cancel(match_id, reason=reason)
                 except NotImplementedError:
-                    pass  # Solana integration not yet connected
+                    pass
 
                 # Update DB status
                 async with worker_session_factory() as db:

@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from rawl.celery_app import celery
-
 logger = logging.getLogger(__name__)
 
 
-@celery.task(name="rawl.training.worker.run_training", bind=True)
-def run_training(self, job_id: str):
+async def run_training(job_id: str):
     """Training is off-platform.
 
     Users rent their own GPUs and run the open-source training package.

@@ -1,45 +1,10 @@
-"""Celery tasks for match execution."""
+"""Async match execution functions called by the emulation worker."""
 from __future__ import annotations
 
 import logging
 from datetime import UTC
 
-from rawl.celery_app import celery, celery_async_run, get_sync_redis
-
 logger = logging.getLogger(__name__)
-
-
-@celery.task(
-    name="rawl.engine.tasks.execute_match",
-    bind=True,
-    soft_time_limit=2100,  # 35 min — raises SoftTimeLimitExceeded
-    time_limit=2400,       # 40 min — SIGKILL
-)
-def execute_match(
-    self,
-    match_id: str,
-    game_id: str,
-    fighter_a_model: str,
-    fighter_b_model: str,
-    match_format: int = 3,
-):
-    """Celery task: execute a full match.
-
-    Sync wrapper around async match runner following the pattern in health_checker.py.
-    On success: updates Elo via services/elo.py, updates Match status.
-    Uses a Redis distributed lock to prevent double execution with acks_late.
-    """
-    r = get_sync_redis()
-    lock_key = f"match-lock:{match_id}"
-    if not r.set(lock_key, "1", nx=True, ex=3600):
-        logger.info("Match already running, skipping duplicate", extra={"match_id": match_id})
-        return
-    try:
-        celery_async_run(
-            _execute_match_async(match_id, game_id, fighter_a_model, fighter_b_model, match_format)
-        )
-    finally:
-        r.delete(lock_key)
 
 
 async def _execute_match_async(
@@ -135,12 +100,6 @@ async def _execute_match_async(
             logger.warning("Match failed or was cancelled", extra={"match_id": match_id})
 
 
-@celery.task(name="rawl.engine.tasks.run_calibration_task", bind=True)
-def run_calibration_task(self, fighter_id: str):
-    """Celery task: run calibration matches for a fighter."""
-    celery_async_run(_run_calibration_async(fighter_id))
-
-
 async def _run_calibration_async(fighter_id: str):
     from rawl.db.session import worker_session_factory
     from rawl.services.elo import run_calibration
@@ -151,12 +110,6 @@ async def _run_calibration_async(fighter_id: str):
             "Calibration task finished",
             extra={"fighter_id": fighter_id, "success": success},
         )
-
-
-@celery.task(name="rawl.engine.tasks.seasonal_reset_task")
-def seasonal_reset_task():
-    """Celery Beat task: quarterly seasonal reset for all ready fighters."""
-    celery_async_run(_seasonal_reset_async())
 
 
 async def _seasonal_reset_async():
@@ -185,33 +138,6 @@ async def _seasonal_reset_async():
             "Seasonal reset completed",
             extra={"fighters_reset": reset_count},
         )
-
-
-@celery.task(name="rawl.engine.tasks.retry_failed_uploads_task")
-def retry_failed_uploads_task():
-    """Celery Beat task: retry failed S3 uploads."""
-    celery_async_run(_retry_failed_uploads_async())
-
-
-async def _retry_failed_uploads_async():
-    from rawl.engine.failed_upload_handler import retry_failed_uploads
-
-    retried = await retry_failed_uploads()
-    if retried:
-        logger.info("Retried failed uploads", extra={"count": retried})
-
-
-@celery.task(name="rawl.engine.tasks.normalize_pretrained_models")
-def normalize_pretrained_models():
-    """One-time task: normalize all pretrained and reference models in S3.
-
-    Re-saves models in the current Python/SB3 native format, eliminating
-    cross-version cloudpickle and state_dict issues.
-
-    Invoke manually after deploy:
-        celery -A rawl.celery_app call rawl.engine.tasks.normalize_pretrained_models
-    """
-    celery_async_run(_normalize_pretrained_async())
 
 
 async def _normalize_pretrained_async():

@@ -20,9 +20,9 @@ async_session_factory = async_sessionmaker(
     expire_on_commit=False,
 )
 
-# Worker engine for Celery tasks (NullPool — no connection reuse across event loops).
+# Worker engine for subprocess workers (NullPool — no connection reuse across event loops).
 # SQLAlchemy docs: "use NullPool for async engines used across multiple asyncio event loops".
-# Each asyncio.run() in a Celery task gets fresh connections that don't persist.
+# Each asyncio.run() in a subprocess gets fresh connections that don't persist.
 worker_engine = create_async_engine(
     settings.database_url,
     echo=False,

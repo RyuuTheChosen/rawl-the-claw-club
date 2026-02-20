@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select, func
 
 from rawl.config import settings
@@ -37,6 +37,7 @@ TIER_LIMITS = {
 
 @router.post("/train", response_model=TrainResponse, status_code=201)
 async def start_training(
+    request: Request,
     db: DbSession,
     wallet: ApiKeyAuth,
     body: TrainRequest,
@@ -94,9 +95,8 @@ async def start_training(
     await db.commit()
     await db.refresh(job)
 
-    # Kick off Celery training task
-    from rawl.training.worker import run_training
-    run_training.delay(str(job.id))
+    # Kick off training task via ARQ (always raises NotImplementedError — off-platform)
+    await request.app.state.arq_pool.enqueue_job("run_training", str(job.id))
 
     return TrainResponse(job_id=job.id, status=job.status)
 
@@ -159,11 +159,7 @@ async def stop_training(
     if job.status not in ("queued", "running"):
         raise HTTPException(status_code=400, detail=f"Cannot stop job with status: {job.status}")
 
-    from rawl.celery_app import celery
     from datetime import datetime, timezone
-
-    # Revoke the Celery task
-    celery.control.revoke(str(job.id), terminate=True, signal="SIGTERM")
 
     job.status = "cancelled"
     job.completed_at = datetime.now(timezone.utc)

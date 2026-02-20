@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import tempfile
 import time
 from pathlib import Path
-
-from rawl.celery_app import celery, celery_async_run
 
 logger = logging.getLogger(__name__)
 
@@ -16,22 +15,7 @@ ACTION_SPACE_TEST_FRAMES = 100
 INFERENCE_TEST_STEPS = 100
 
 
-@celery.task(name="rawl.training.validation.validate_model")
-def validate_model(fighter_id: str, model_s3_key: str):
-    """4-step model validation pipeline per SDD Section 4.6.
-
-    1. Normalize + load test — load with compat shims, re-save in native format
-    2. Action space validation — 100 random observations, check output shape
-    3. Inference latency — 100 steps, reject if p99 > 5ms
-    4. Sandbox — disposable Docker container, no network, read-only FS, 60s timeout
-
-    Fighter status: validating → ready (pass) or rejected (fail)
-    """
-    celery_async_run(_validate_async(fighter_id, model_s3_key))
-
-
 async def _validate_async(fighter_id: str, model_s3_key: str):
-    import docker
     import numpy as np
     from sqlalchemy import select
 
@@ -52,14 +36,10 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
 
         try:
             # Step 1: Normalize + load test
-            # Downloads from S3, loads with compat shims, re-saves in native
-            # format, re-uploads to same S3 key. Returns loaded model.
             logger.info("Validation step 1: Normalize & load", extra={"fighter_id": fighter_id})
             model = await normalize_model(model_s3_key)
             if model is None:
-                logger.error(
-                    "Normalize/load failed", extra={"fighter_id": fighter_id}
-                )
+                logger.error("Normalize/load failed", extra={"fighter_id": fighter_id})
                 await update_fighter_status(fighter_id, "rejected", db)
                 return
 
@@ -98,16 +78,18 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
                 await update_fighter_status(fighter_id, "rejected", db)
                 return
 
-            # Step 4: Sandbox run
-            # Save normalized model to temp file for the Docker container
+            # Step 4: Sandbox run — wrap blocking Docker call in thread
             logger.info("Validation step 4: Sandbox", extra={"fighter_id": fighter_id})
             with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
                 sandbox_path = tmp.name
             model.save(sandbox_path)
 
             try:
+                import docker
+
                 client = docker.from_env()
-                client.containers.run(
+                await asyncio.to_thread(
+                    client.containers.run,
                     "python:3.11-slim",
                     command=[
                         "python", "-c",
@@ -135,9 +117,9 @@ async def _validate_async(fighter_id: str, model_s3_key: str):
 
             # All steps passed — move to calibration phase
             await update_fighter_status(fighter_id, "calibrating", db)
-            from rawl.engine.tasks import run_calibration_task
+            from rawl.engine.emulation_queue import enqueue_calibration_now
 
-            run_calibration_task.delay(fighter_id)
+            await enqueue_calibration_now(fighter_id)
             logger.info(
                 "Validation passed, dispatched calibration",
                 extra={"fighter_id": fighter_id, "p99_ms": round(p99, 2)},

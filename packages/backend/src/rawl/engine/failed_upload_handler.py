@@ -1,4 +1,4 @@
-"""Dead-letter handler for failed S3 uploads with Celery Beat retry."""
+"""Dead-letter handler for failed S3 uploads — retried by ARQ cron every 5 minutes."""
 from __future__ import annotations
 
 import logging

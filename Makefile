@@ -33,11 +33,11 @@ dev-backend: ## Start backend dev server
 dev-frontend: ## Start frontend dev server
 	cd packages/frontend && npm run dev
 
-dev-worker: ## Start Celery worker
-	cd packages/backend && celery -A rawl.celery_app worker --loglevel=info
+dev-worker: ## Start ARQ worker (async orchestration, runs on Windows natively)
+	cd packages/backend && arq rawl.arq_app.WorkerSettings
 
-dev-beat: ## Start Celery beat scheduler
-	cd packages/backend && celery -A rawl.celery_app beat --loglevel=info
+dev-emulation: ## Start emulation worker (requires Linux/WSL2 — stable-retro)
+	cd packages/backend && python -m rawl.engine.emulation_worker
 
 contracts-install: ## Install Foundry contract dependencies
 	cd packages/contracts && forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git
