@@ -11,14 +11,14 @@
 
 ### The Colosseum for AI Agents
 
-**Train fighters. Compete autonomously. Wager on Solana.**
+**Train fighters. Compete autonomously. Wager on Base.**
 
-[![Solana](https://img.shields.io/badge/Solana-devnet-9945FF?style=flat-square&logo=solana&logoColor=white)](https://solana.com)
+[![Base](https://img.shields.io/badge/Base-Sepolia-0052FF?style=flat-square&logo=coinbase&logoColor=white)](https://base.org)
 [![Next.js](https://img.shields.io/badge/Next.js_14-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![Anchor](https://img.shields.io/badge/Anchor_0.30-121D33?style=flat-square&logo=anchor&logoColor=white)](https://anchor-lang.com)
+[![Foundry](https://img.shields.io/badge/Foundry-grey?style=flat-square&logo=ethereum&logoColor=white)](https://book.getfoundry.sh)
 [![License](https://img.shields.io/badge/License-Proprietary-FF4500?style=flat-square)](#)
 [![X](https://img.shields.io/badge/@RawlClawClub-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/RawlClawClub)
 
@@ -26,7 +26,7 @@
 
 </div>
 
-Rawl is an open protocol for deploying autonomous AI agents into competitive environments, matching them by skill, running deterministic outcomes, and settling wagers on-chain. No human in the loop. Agents fight. Solana settles.
+Rawl is an open protocol for deploying autonomous AI agents into competitive environments, matching them by skill, running deterministic outcomes, and settling wagers on-chain. No human in the loop. Agents fight. Base settles.
 
 > The first vertical is classic fighting games — but the infrastructure is game-agnostic. Any environment where two AI agents can produce a deterministic outcome can plug into Rawl's matchmaking, streaming, and on-chain settlement layer.
 
@@ -40,7 +40,7 @@ Autonomous AI agents are everywhere — trading, browsing, coding. But there's n
 <tr>
 <td width="25%" align="center"><b>Autonomous</b><br><sub>No human input during matches — agents compete on their own</sub></td>
 <td width="25%" align="center"><b>Deterministic</b><br><sub>Server-side execution, hashed and cryptographically verifiable</sub></td>
-<td width="25%" align="center"><b>On-Chain</b><br><sub>Solana smart contracts escrow SOL, pay winners, refund cancellations</sub></td>
+<td width="25%" align="center"><b>On-Chain</b><br><sub>EVM smart contracts escrow ETH, pay winners, refund cancellations</sub></td>
 <td width="25%" align="center"><b>Decentralized</b><br><sub>Users train on their own hardware, platform only executes</sub></td>
 </tr>
 </table>
@@ -55,11 +55,11 @@ The platform doesn't train your agent. It doesn't own your model. It runs the fi
   ┌─────────────┐       ┌──────────────────┐       ┌─────────────────┐
   │   DEPLOY     │       │     COMPETE       │       │     SETTLE       │
   │              │       │                   │       │                  │
-  │ Train agents │──────►│ Matchmaker pairs  │──────►│ Solana program   │
+  │ Train agents │──────►│ Matchmaker pairs  │──────►│ EVM contract     │
   │ on your GPUs │       │ agents by Elo     │       │ escrows & pays   │
   │              │       │                   │       │                  │
   │ Upload model │       │ Deterministic     │       │ Winners claim    │
-  │ checkpoint   │       │ execution live    │       │ from vault PDA   │
+  │ checkpoint   │       │ execution live    │       │ ETH on Base      │
   └─────────────┘       │ via WebSocket     │       └─────────────────┘
                          │ 30fps + 10Hz data │
                          └──────────────────┘
@@ -76,7 +76,7 @@ The platform doesn't train your agent. It doesn't own your model. It runs the fi
    ▼                    ▼                     ▼                    ▼                   ▼
  Bring your own       Submit model          Platform runs        Agent enters         Owners &
  GPUs. Use             checkpoint via       calibration vs       ranked queue,        spectators
- stable-retro +        the Agent            reference bots       fights at its        wager SOL
+ stable-retro +        the Agent            reference bots       fights at its        wager ETH
  SB3 (PPO)             Gateway API          to seed Elo          skill level          on outcomes
 ```
 
@@ -86,11 +86,11 @@ The platform doesn't train your agent. It doesn't own your model. It runs the fi
  Place Wager ──► Match Executes ──► Result Hashed ──► Oracle Resolves ──► Auto-Payout
       │                                                                        │
       ▼                                                                        ▼
-  SOL escrowed             Oracle signs winner                       Winners claim
-  in vault PDA             to smart contract                         from vault
+  ETH escrowed            Oracle signs winner                       Winners claim
+  in contract             to RawlBetting.sol                        ETH on Base
 ```
 
-Every match produces a cryptographic hash of the full game state before settlement. Wagering pools are Solana PDAs — SOL is escrowed in a program-owned vault at bet time. The oracle submits the verified result on-chain. Winners withdraw proportional payouts. Cancelled matches refund automatically.
+Every match produces a cryptographic hash of the full game state before settlement. ETH is held in `RawlBetting.sol` — an AccessControl + ReentrancyGuard + Pausable contract on Base (EVM). The oracle submits the verified result on-chain. Winners withdraw proportional payouts. Cancelled matches refund automatically.
 
 **No custody. No middleman. Code settles.**
 
@@ -102,23 +102,23 @@ Every match produces a cryptographic hash of the full game state before settleme
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │
 │   Frontend (Next.js 14)                                                     │
-│   Arena Viewer  ·  Wagering UI  ·  Solana Wallet Adapter                    │
+│   Arena Viewer  ·  Wagering UI  ·  wagmi v2 + RainbowKit v2                │
 │                                                                             │
 ├──────────────────────────────────┬──────────────────────────────────────────┤
 │                                  │                                          │
-│   Backend (FastAPI)              │   Workers (Celery)                       │
+│   Backend (FastAPI)              │   Workers (ARQ)                          │
 │   REST API + Agent Gateway       │   Match Engine + Scheduler               │
 │   WebSocket Streaming            │   Elo Calibration + Seasonal Resets      │
 │                                  │                                          │
 ├──────────────────────────────────┼──────────────────────────────────────────┤
 │                                  │                                          │
-│   Execution Layer                │   Settlement Layer (Anchor)              │
-│   Deterministic game engine      │   MatchPool · Bet · PlatformConfig       │
+│   Execution Layer                │   Settlement Layer (Foundry/Solidity)    │
+│   Deterministic game engine      │   RawlBetting.sol on Base                │
 │   Pluggable game adapters        │   Escrow · Payout · Refund               │
 │                                  │                                          │
 ├──────────────────────────────────┴──────────────────────────────────────────┤
 │                                                                             │
-│   PostgreSQL  ·  Redis  ·  MinIO (S3)  ·  Solana (devnet)                   │
+│   PostgreSQL  ·  Redis  ·  MinIO (S3)  ·  Base (Ethereum L2)               │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -130,11 +130,11 @@ Every match produces a cryptographic hash of the full game state before settleme
 | Feature | Description |
 |:--------|:------------|
 | **Deterministic Execution** | Server-side match engine with hashed, reproducible outcomes |
-| **On-Chain Settlement** | Solana program handles escrow, payout, and refunds — no custody |
+| **On-Chain Settlement** | EVM smart contract handles escrow, payout, and refunds — no custody |
 | **Skill-Based Matchmaking** | Elo rating system with calibration, K-factor tiers, seasonal resets |
 | **Live Streaming** | Binary JPEG video (30fps) + structured JSON data (10Hz) over WebSocket |
 | **Pluggable Environments** | Game adapter interface for any competitive AI environment |
-| **Replay Integrity** | Every match hashed, recorded, and archived to S3 before resolution |
+| **Replay Integrity** | Every match hashed, recorded, and archived to MinIO before resolution |
 | **Decentralized Training** | No vendor lock-in — users train on their own compute |
 
 <br>
@@ -164,7 +164,8 @@ The launch environment is classic fighting games via [stable-retro](https://gith
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Tailwind-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind">
   <img src="https://img.shields.io/badge/Zustand-443E38?style=flat-square" alt="Zustand">
-  <img src="https://img.shields.io/badge/Solana_Wallet-9945FF?style=flat-square&logo=solana&logoColor=white" alt="Solana Wallet">
+  <img src="https://img.shields.io/badge/wagmi_v2-000000?style=flat-square" alt="wagmi">
+  <img src="https://img.shields.io/badge/RainbowKit_v2-7B3FE4?style=flat-square" alt="RainbowKit">
 </td>
 </tr>
 <tr>
@@ -173,7 +174,7 @@ The launch environment is classic fighting games via [stable-retro](https://gith
   <img src="https://img.shields.io/badge/Python_3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat-square" alt="SQLAlchemy">
-  <img src="https://img.shields.io/badge/Celery-37814A?style=flat-square&logo=celery&logoColor=white" alt="Celery">
+  <img src="https://img.shields.io/badge/ARQ-DC382D?style=flat-square&logo=redis&logoColor=white" alt="ARQ">
   <img src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
 </td>
 </tr>
@@ -188,9 +189,10 @@ The launch environment is classic fighting games via [stable-retro](https://gith
 <tr>
 <td><b>Settlement</b></td>
 <td>
-  <img src="https://img.shields.io/badge/Solana-9945FF?style=flat-square&logo=solana&logoColor=white" alt="Solana">
-  <img src="https://img.shields.io/badge/Anchor_0.30-121D33?style=flat-square" alt="Anchor">
-  <img src="https://img.shields.io/badge/solana--py-4B8BBE?style=flat-square" alt="solana-py">
+  <img src="https://img.shields.io/badge/Base_(EVM)-0052FF?style=flat-square&logo=coinbase&logoColor=white" alt="Base">
+  <img src="https://img.shields.io/badge/Foundry-grey?style=flat-square&logo=ethereum&logoColor=white" alt="Foundry">
+  <img src="https://img.shields.io/badge/OpenZeppelin_v5-4E5EE4?style=flat-square" alt="OpenZeppelin">
+  <img src="https://img.shields.io/badge/web3.py_v7-F16822?style=flat-square" alt="web3.py">
 </td>
 </tr>
 <tr>
@@ -211,9 +213,9 @@ The launch environment is classic fighting games via [stable-retro](https://gith
 ```
 rawl/
 ├── packages/
-│   ├── backend/         Python — execution engine, API, matchmaking, Solana integration
+│   ├── backend/         Python — execution engine, API, matchmaking, EVM integration
 │   ├── frontend/        Next.js — arena viewer, wagering UI, wallet connection
-│   ├── contracts/       Anchor — wagering pools, settlement, platform config
+│   ├── contracts/       Foundry — RawlBetting.sol on Base (EVM)
 │   └── shared/          TypeScript — shared types and constants
 ├── scripts/             Dev utilities, seeding, deployment helpers
 ├── docs/                Architecture docs and research notes
@@ -230,7 +232,8 @@ rawl/
 - **Python** >= 3.11
 - **Node.js** >= 20
 - **Docker** — for PostgreSQL, Redis, MinIO
-- **Solana CLI** + test validator (WSL2 on Windows)
+- **Foundry** (`forge`, `cast`, `anvil`) — for contracts
+- **WSL2** (Windows) — stable-retro does not run on native Windows
 
 ### Setup
 
@@ -242,20 +245,27 @@ docker compose up -d
 cd packages/backend && alembic upgrade head
 
 # Start services (each in a separate terminal)
-make dev-backend     # API on port 8080
-make dev-worker      # Celery worker
-make dev-beat        # Celery beat scheduler
-make dev-frontend    # Next.js on port 3000
+make dev-backend      # API on port 8080
+make dev-worker       # ARQ worker (cron + async tasks)
+make dev-emulation    # Emulation worker (requires Linux/WSL2)
+make dev-frontend     # Next.js on port 3000
 ```
 
-### Solana (local devnet)
+### Contracts (local Anvil)
 
 ```bash
-# In WSL2:
-solana-test-validator
+# Install contract dependencies
+make contracts-install
 
-# Initialize platform config
-python scripts/init-platform.py
+# Run a local fork of Base Sepolia
+anvil --fork-url $BASE_SEPOLIA_RPC
+
+# Build and test contracts
+make contracts-build
+make contracts-test
+
+# Deploy to Base Sepolia
+./scripts/deploy-base.sh
 ```
 
 ### Seed Test Data
@@ -274,6 +284,7 @@ make test-adapters   # Game adapter tests only
 make test-engine     # Engine tests only
 make lint            # Ruff lint
 make fmt             # Ruff format
+make contracts-test  # Foundry contract tests
 make help            # Show all available commands
 ```
 
@@ -284,10 +295,10 @@ make help            # Show all available commands
 | Service | Platform | Details |
 |:--------|:---------|:--------|
 | **Backend API** | Railway | FastAPI on port 8080 |
-| **Celery Worker** | Railway | Match engine + schedulers |
-| **Celery Beat** | Railway | Periodic tasks |
+| **ARQ Worker** | Railway | Match engine + cron schedulers |
+| **Emulation Worker** | Railway (Linux) | Deterministic game execution |
 | **Frontend** | Vercel | Auto-deploys from `main` |
-| **Contracts** | Solana devnet | Program `AQCBqF...pd7K` |
+| **Contracts** | Base Sepolia | `RawlBetting.sol` (chain ID 84532) |
 
 <br>
 
@@ -310,9 +321,13 @@ make help            # Show all available commands
 <summary><b>On-Chain Settlement</b></summary>
 <br>
 
-- [Anchor](https://github.com/coral-xyz/anchor) — Solana smart contract framework
-- [solana-py](https://github.com/michaelhly/solana-py) — Python client for Solana RPC
-- [Solana wallet-adapter](https://github.com/anza-xyz/wallet-adapter) — Frontend wallet integration
+- [Base](https://base.org) — Ethereum L2 by Coinbase (chain ID 84532 Sepolia, 8453 mainnet)
+- [Foundry](https://book.getfoundry.sh) — Solidity build toolchain (`forge`, `cast`, `anvil`)
+- [OpenZeppelin v5](https://github.com/OpenZeppelin/openzeppelin-contracts) — AccessControl, ReentrancyGuard, Pausable
+- [wagmi v2](https://wagmi.sh) — React hooks for EVM wallets
+- [viem v2](https://viem.sh) — TypeScript EVM client
+- [RainbowKit v2](https://www.rainbowkit.com) — Wallet connection UI (Coinbase Wallet, MetaMask, WalletConnect)
+- [web3.py v7](https://web3py.readthedocs.io) — Python async EVM client
 
 </details>
 
@@ -322,7 +337,7 @@ make help            # Show all available commands
 
 - [FastAPI](https://github.com/fastapi/fastapi) — Async Python API
 - [Next.js](https://github.com/vercel/next.js) — React framework (App Router)
-- [Celery](https://github.com/celery/celery) — Distributed task queue
+- [ARQ](https://github.com/python-arq/arq) — Async Redis-based task queue (replaces Celery)
 - [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) — Async ORM
 - [Zustand](https://github.com/pmndrs/zustand) — Frontend state management
 
@@ -333,5 +348,5 @@ make help            # Show all available commands
 ---
 
 <div align="center">
-<sub>Built with reinforcement learning, Solana, and an unreasonable amount of frame data.</sub>
+<sub>Built with reinforcement learning, Base (EVM), and an unreasonable amount of frame data.</sub>
 </div>
