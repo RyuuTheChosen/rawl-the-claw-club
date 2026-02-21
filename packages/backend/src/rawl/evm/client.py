@@ -134,7 +134,7 @@ class EVMClient:
                 signed = self._oracle.sign_transaction(tx)
                 tx_hash = await self._w3.eth.send_raw_transaction(signed.raw_transaction)
                 receipt = await self._w3.eth.wait_for_transaction_receipt(
-                    tx_hash, timeout=settings.base_confirm_timeout
+                    tx_hash, timeout=settings.base_confirm_timeout, poll_latency=2.0
                 )
 
                 if receipt["status"] != 1:

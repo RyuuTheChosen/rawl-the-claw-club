@@ -24,6 +24,8 @@ RECONNECT_BACKOFF_INITIAL = 1
 RECONNECT_BACKOFF_MAX = 30
 REDIS_LAST_BLOCK_KEY = "evm:last_block"
 ODDS_TTL = 300  # 5 minutes
+MAX_BLOCK_RANGE = 2000  # max blocks per eth_getLogs call (public RPC safe)
+MAX_CATCHUP_BLOCKS = 10000  # if further behind than this, skip to head
 
 
 class EventListener:
@@ -45,16 +47,26 @@ class EventListener:
         )
 
         # Restore last processed block from Redis
+        current_head = await self._w3.eth.get_block_number()
         try:
             stored = await redis_pool.get(REDIS_LAST_BLOCK_KEY)
             if stored:
-                self._last_block = int(stored)
-                logger.info("Resuming event listener from block %d", self._last_block)
+                stored_block = int(stored)
+                gap = current_head - stored_block
+                if gap > MAX_CATCHUP_BLOCKS:
+                    logger.warning(
+                        "Stored block %d is %d blocks behind head %d (> %d) — skipping to head",
+                        stored_block, gap, current_head, MAX_CATCHUP_BLOCKS,
+                    )
+                    self._last_block = current_head
+                else:
+                    self._last_block = stored_block
+                    logger.info("Resuming event listener from block %d (%d behind)", stored_block, gap)
         except Exception:
             pass
 
         if self._last_block == 0:
-            self._last_block = await self._w3.eth.get_block_number()
+            self._last_block = current_head
             logger.info("Starting event listener from current block %d", self._last_block)
 
         backoff = RECONNECT_BACKOFF_INITIAL
@@ -91,19 +103,23 @@ class EventListener:
             await asyncio.sleep(POLL_INTERVAL)
 
     async def _process_blocks(self, from_block: int, to_block: int) -> None:
-        """Fetch and process logs for a block range."""
-        logs = await self._w3.eth.get_logs(
-            {
-                "address": self._w3.to_checksum_address(settings.contract_address),
-                "fromBlock": from_block,
-                "toBlock": to_block,
-            }
-        )
-        for log in logs:
-            try:
-                await self._handle_log(log)
-            except Exception:
-                logger.exception("Error handling log in block %d", log.get("blockNumber", 0))
+        """Fetch and process logs for a block range, chunked to avoid RPC limits."""
+        chunk_start = from_block
+        while chunk_start <= to_block:
+            chunk_end = min(chunk_start + MAX_BLOCK_RANGE - 1, to_block)
+            logs = await self._w3.eth.get_logs(
+                {
+                    "address": self._w3.to_checksum_address(settings.contract_address),
+                    "fromBlock": chunk_start,
+                    "toBlock": chunk_end,
+                }
+            )
+            for log in logs:
+                try:
+                    await self._handle_log(log)
+                except Exception:
+                    logger.exception("Error handling log in block %d", log.get("blockNumber", 0))
+            chunk_start = chunk_end + 1
 
     async def _handle_log(self, log) -> None:
         """Decode and route a single event log."""

@@ -4,7 +4,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-_ABI_PATH = (
+# Bundled ABI (copied from Foundry out/ at build time — works in Docker / installed package)
+_BUNDLED = Path(__file__).parent / "RawlBetting.json"
+
+# Foundry output path (works in local dev monorepo)
+_FOUNDRY = (
     Path(__file__).parent.parent.parent.parent.parent
     / "contracts"
     / "out"
@@ -14,12 +18,10 @@ _ABI_PATH = (
 
 
 def load_abi() -> list:
-    """Load ABI from Foundry artifact.
-
-    Falls back to empty list if artifact not yet built (allows import during dev).
-    """
-    if _ABI_PATH.exists():
-        return json.loads(_ABI_PATH.read_text())["abi"]
+    """Load ABI from bundled artifact, falling back to Foundry output for local dev."""
+    for path in (_BUNDLED, _FOUNDRY):
+        if path.exists():
+            return json.loads(path.read_text())["abi"]
     return []
 
 
