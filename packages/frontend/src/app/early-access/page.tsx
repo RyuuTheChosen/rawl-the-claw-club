@@ -252,7 +252,7 @@ export default function EarlyAccessPage() {
       {/* ============================================================ */}
       {/* SECTION 1 — HERO (100vh)                                     */}
       {/* ============================================================ */}
-      <section className="relative flex min-h-svh w-full items-center justify-center px-4">
+      <section className="relative flex min-h-svh w-full items-start justify-center px-4 pt-24 sm:pt-32">
         {/* Background: radial orange glow */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
           <div className="h-[800px] w-[600px] rounded-full bg-neon-orange/[0.08] blur-[120px]" />
@@ -270,7 +270,7 @@ export default function EarlyAccessPage() {
         <div className="relative mx-auto flex w-full max-w-2xl flex-col items-center text-center">
           {/* RAWL title */}
           <motion.h1
-            className="font-pixel text-7xl tracking-[0.2em] text-neon-orange text-glow-orange sm:text-9xl"
+            className="font-pixel text-7xl tracking-[0.2em] pl-[0.2em] text-neon-orange text-glow-orange sm:text-9xl"
             initial={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
             transition={{ type: "spring", stiffness: 120, damping: 20, duration: 0.6 }}
