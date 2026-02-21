@@ -71,15 +71,12 @@ services:
       DATABASE_URL: postgresql+asyncpg://rawl:rawl@postgres:5432/rawl
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
-      BASE_RPC_URL: http://host.docker.internal:8545
       MAX_CONCURRENT_MATCHES: "4"
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
       minio:    { condition: service_healthy }
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # Linux: maps to host IP
 
 volumes:
   pgdata:

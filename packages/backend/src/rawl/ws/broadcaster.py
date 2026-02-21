@@ -211,7 +211,10 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
                         await websocket.send_bytes(eos_frame)
                     except Exception:
                         pass
-                    await websocket.close(code=1000, reason="Stream ended")
+                    try:
+                        await websocket.close(code=1000, reason="Stream ended")
+                    except Exception:
+                        pass
                     return
 
                 nal_data = data.get(b"nal", b"")
@@ -240,7 +243,10 @@ async def video_channel(websocket: WebSocket, match_id: str) -> None:
                                     "drop_rate": f"{drop_rate:.0%}",
                                 },
                             )
-                            await websocket.close(code=4008, reason="Client too slow")
+                            try:
+                                await websocket.close(code=4008, reason="Client too slow")
+                            except Exception:
+                                pass
                             return
                         # Reset counters for next window
                         sent_count = 0

@@ -84,25 +84,22 @@ async def check_base_rpc() -> HealthStatus:
         return HealthStatus("base_rpc", False, message=str(e))
 
 
-async def check_retro() -> HealthStatus:
-    """Check that stable-retro is importable and the ROM is available."""
-    from rawl.config import settings
-
+async def check_emulation_worker() -> HealthStatus:
+    """Check that the emulation worker is alive via its Redis heartbeat key."""
     start = time.monotonic()
     try:
-        import stable_retro
+        from rawl.redis_client import redis_pool
 
-        stable_retro.data.get_romfile_path(settings.retro_game)
+        val = await redis_pool.client.get("rawl:emulation:health-check")
+        if val:
+            return HealthStatus(
+                "emulation_worker", True, latency_ms=(time.monotonic() - start) * 1000
+            )
         return HealthStatus(
-            "retro",
-            True,
-            latency_ms=(time.monotonic() - start) * 1000,
-            message=f"ROM found: {settings.retro_game}",
+            "emulation_worker", False, message="No emulation worker heartbeat (worker down or starting)"
         )
-    except FileNotFoundError:
-        return HealthStatus("retro", False, message=f"ROM not found: {settings.retro_game}")
     except Exception as e:
-        return HealthStatus("retro", False, message=str(e))
+        return HealthStatus("emulation_worker", False, message=str(e))
 
 
 async def check_match_queue() -> HealthStatus:
@@ -156,7 +153,7 @@ async def get_all_health() -> list[HealthStatus]:
         check_s3,
         check_arq_worker,
         check_base_rpc,
-        check_retro,
+        check_emulation_worker,
         check_match_queue,
         check_active_matches,
     ]:
