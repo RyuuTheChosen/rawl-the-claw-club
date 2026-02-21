@@ -216,6 +216,8 @@ async def create_custom_match(
         model_a=fighter_a.model_path,
         model_b=fighter_b.model_path,
         match_format=body.match_format,
+        p1_character=fighter_a.character or "",
+        p2_character=fighter_b.character or "",
     )
 
     return {

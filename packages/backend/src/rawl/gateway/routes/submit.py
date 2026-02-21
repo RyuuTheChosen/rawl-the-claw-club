@@ -10,6 +10,7 @@ from rawl.db.models.fighter import Fighter
 from rawl.db.models.user import User
 from rawl.dependencies import DbSession
 from rawl.game_adapters import get_adapter
+from rawl.game_adapters.characters import validate_character
 from rawl.game_adapters.errors import UnknownGameError
 from rawl.gateway.auth import ApiKeyAuth
 from rawl.gateway.schemas import FighterResponse, SubmitFighterRequest
@@ -48,6 +49,13 @@ async def submit_fighter(
         get_adapter(body.game_id)
     except UnknownGameError:
         raise HTTPException(status_code=400, detail=f"Unknown game: {body.game_id}")
+
+    # Validate character against per-game allowlist
+    if not validate_character(body.game_id, body.character):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid character '{body.character}' for game '{body.game_id}'",
+        )
 
     # Get user
     result = await db.execute(select(User).where(User.wallet_address == wallet))

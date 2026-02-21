@@ -13,6 +13,8 @@ async def _execute_match_async(
     fighter_a_model: str,
     fighter_b_model: str,
     match_format: int,
+    p1_character: str = "",
+    p2_character: str = "",
 ):
     from datetime import datetime
 
@@ -29,6 +31,8 @@ async def _execute_match_async(
         fighter_a_model_path=fighter_a_model,
         fighter_b_model_path=fighter_b_model,
         match_format=match_format,
+        p1_character=p1_character,
+        p2_character=p2_character,
     )
 
     async with worker_session_factory() as db:

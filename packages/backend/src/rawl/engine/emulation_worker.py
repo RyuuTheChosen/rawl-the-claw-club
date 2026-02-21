@@ -29,6 +29,9 @@ RANKED_QUEUE      = "rawl:emulation:queue"
 CAL_QUEUE         = "rawl:emulation:queue:cal"
 RANKED_PROCESSING = "rawl:emulation:processing"
 CAL_PROCESSING    = "rawl:emulation:processing:cal"
+HEALTH_KEY        = "rawl:emulation:health-check"
+HEALTH_TTL        = 30   # seconds; if worker dies, key expires within this window
+HEALTH_INTERVAL   = 50   # write heartbeat every N poll ticks (~10s at 0.2s/tick)
 
 
 # ── Subprocess entry point ─────────────────────────────────────────────────────
@@ -50,6 +53,8 @@ def run_match_process(job: dict, processing_key: str, raw_payload: str) -> None:
                     fighter_a_model=job["fighter_a_model"],
                     fighter_b_model=job["fighter_b_model"],
                     match_format=job.get("match_format", 3),
+                    p1_character=job.get("p1_character", ""),
+                    p2_character=job.get("p2_character", ""),
                 )
             elif job["job_type"] == "calibration":
                 from rawl.engine.tasks import _run_calibration_async
@@ -105,9 +110,15 @@ def main() -> None:
 
     logger.info("Emulation worker started", extra={"max_concurrent": MAX_CONCURRENT})
 
+    tick = 0
     while not shutdown_requested:
         # Reap finished processes
         active = [p for p in active if p.is_alive()]
+
+        # Write heartbeat key so API health check can detect this worker
+        tick += 1
+        if tick % HEALTH_INTERVAL == 1:
+            r.set(HEALTH_KEY, "1", ex=HEALTH_TTL)
 
         if len(active) < MAX_CONCURRENT:
             # Try ranked queue first (high priority)

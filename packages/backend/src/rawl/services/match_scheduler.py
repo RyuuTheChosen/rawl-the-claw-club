@@ -89,6 +89,8 @@ async def _schedule_async():
                     model_b=fighter_b.model_path,
                     match_format=settings.default_match_format,
                     delay_seconds=delay,
+                    p1_character=fighter_a.character or "",
+                    p2_character=fighter_b.character or "",
                 )
             else:
                 # No pair found — widen Elo windows for next tick

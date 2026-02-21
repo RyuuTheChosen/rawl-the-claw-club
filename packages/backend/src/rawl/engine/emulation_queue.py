@@ -53,6 +53,8 @@ async def enqueue_ranked(
     model_b: str,
     match_format: int,
     delay_seconds: float,
+    p1_character: str = "",
+    p2_character: str = "",
 ) -> None:
     """Enqueue a ranked match to the deferred sorted set (betting window)."""
     payload = json.dumps({
@@ -63,6 +65,8 @@ async def enqueue_ranked(
         "fighter_b_model": model_b,
         "match_format": match_format,
         "calibration": False,
+        "p1_character": p1_character,
+        "p2_character": p2_character,
     })
     run_at = time.time() + delay_seconds
     r = redis_pool.client
@@ -76,6 +80,8 @@ async def enqueue_ranked_now(
     model_a: str,
     model_b: str,
     match_format: int,
+    p1_character: str = "",
+    p2_character: str = "",
 ) -> None:
     """Enqueue a ranked match for immediate execution (no betting window)."""
     payload = json.dumps({
@@ -86,6 +92,8 @@ async def enqueue_ranked_now(
         "fighter_b_model": model_b,
         "match_format": match_format,
         "calibration": False,
+        "p1_character": p1_character,
+        "p2_character": p2_character,
     })
     await redis_pool.client.rpush(RANKED_QUEUE, payload)
 

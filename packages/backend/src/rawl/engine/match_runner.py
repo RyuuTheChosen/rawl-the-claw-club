@@ -36,8 +36,14 @@ DATA_RECORD_INTERVAL = max(1, settings.streaming_fps // settings.data_channel_hz
 FRAME_STACK_N = 4
 # Frame skipping: step emulator N times per inference call
 FRAME_SKIP = settings.frame_skip
-# Per-button flip probability for match variety (epsilon-greedy noise)
-ACTION_NOISE_PROB = 0.02
+# Per-button flip probability for match variety (epsilon-greedy noise).
+# Genesis emulation is fully deterministic — noise is the ONLY source of
+# match-to-match variation (the seed param on env.reset has no effect).
+ACTION_NOISE_PROB = 0.10
+# Divergence burst: much higher noise for the first N inference steps to
+# create early trajectory divergence that cascades through the whole fight.
+NOISE_BURST_STEPS = 30  # ~120 frames = ~2s at 60fps with FRAME_SKIP=4
+NOISE_BURST_PROB = 0.30
 
 
 async def run_match(
@@ -47,6 +53,8 @@ async def run_match(
     fighter_b_model_path: str,
     match_format: int = 3,
     calibration: bool = False,
+    p1_character: str = "",
+    p2_character: str = "",
 ) -> MatchResult | None:
     """Execute a full match per SDD Appendix A game loop.
 
@@ -65,7 +73,10 @@ async def run_match(
         required_fields=adapter.required_fields,
     )
     recorder = ReplayRecorder(match_id)
-    engine = RetroEngine(game_id, match_id, adapter=adapter)
+    engine = RetroEngine(
+        game_id, match_id, adapter=adapter,
+        p1_character=p1_character, p2_character=p2_character,
+    )
 
     action_log: list = []
     round_history: list[dict] = []
@@ -73,12 +84,30 @@ async def run_match(
     match_locked = False
     frame_count = 0
     last_heartbeat = time.monotonic()
+    encoder = None
 
     try:
         # Step 1: Load fighter models
         logger.info("Loading fighter models", extra={"match_id": match_id})
         model_a = await load_fighter_model(fighter_a_model_path, game_id)
         model_b = await load_fighter_model(fighter_b_model_path, game_id)
+
+        # Validate action spaces — both must be MultiBinary (retro uses binary button arrays)
+        from gymnasium.spaces import MultiBinary as GymMultiBinary
+        from gym.spaces import MultiBinary as GymLegacyMultiBinary
+        def _is_multibinary(space) -> bool:
+            return isinstance(space, (GymMultiBinary, GymLegacyMultiBinary))
+
+        for label, model in (("fighter_a", model_a), ("fighter_b", model_b)):
+            if not _is_multibinary(model.action_space):
+                logger.error(
+                    "Incompatible action space — model uses %s, expected MultiBinary",
+                    type(model.action_space).__name__,
+                    extra={"match_id": match_id, "fighter": label},
+                )
+                if not calibration:
+                    await oracle_client.submit_cancel(match_id, reason="incompatible_model")
+                return None
 
         # Seeded RNG for reproducible action noise (match variety)
         match_rng = np.random.RandomState(
@@ -176,6 +205,7 @@ async def run_match(
 
         # Step 4: Game loop (two-level: outer=inference, inner=frame skip)
         done = False
+        inference_step = 0
         while not done:
             # Preprocess observations for inference (once per batch)
             if use_stack_a:
@@ -195,14 +225,20 @@ async def run_match(
             # Inference: decide actions (once per batch)
             action_a, _ = model_a.predict(obs_a, deterministic=True)
             action_b, _ = model_b.predict(obs_b, deterministic=True)
-            # Epsilon-greedy noise: flip each button with small probability for
+            # Epsilon-greedy noise: flip each button with some probability for
             # match variety while keeping inference fast (deterministic=True).
+            # Genesis emulation is fully deterministic, so noise is the ONLY
+            # source of fight-to-fight variation. Higher noise during the first
+            # NOISE_BURST_STEPS creates early trajectory divergence that
+            # cascades through the rest of the fight (butterfly effect).
             # Seeded by match_id so results are reproducible for hash verification.
-            noise_a = match_rng.random(action_a.shape) < ACTION_NOISE_PROB
-            noise_b = match_rng.random(action_b.shape) < ACTION_NOISE_PROB
+            noise_prob = NOISE_BURST_PROB if inference_step < NOISE_BURST_STEPS else ACTION_NOISE_PROB
+            noise_a = match_rng.random(action_a.shape) < noise_prob
+            noise_b = match_rng.random(action_b.shape) < noise_prob
             action_a = np.where(noise_a, 1 - action_a, action_a)
             action_b = np.where(noise_b, 1 - action_b, action_b)
             combined_action = {"P1": action_a, "P2": action_b}
+            inference_step += 1
 
             # Step emulator FRAME_SKIP times with the same action
             for _skip_i in range(FRAME_SKIP):

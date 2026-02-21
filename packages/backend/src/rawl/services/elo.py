@@ -163,6 +163,8 @@ async def run_calibration(fighter_id: str, db_session) -> bool:
                     fighter_b_model_path=f"reference/{fighter.game_id}/{ref_elo}",
                     match_format=settings.default_match_format,
                     calibration=True,
+                    p1_character=fighter.character or "",
+                    p2_character=fighter.character or "",
                 )
 
                 if match_result is None:
