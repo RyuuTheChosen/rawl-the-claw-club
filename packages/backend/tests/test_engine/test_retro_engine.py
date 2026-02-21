@@ -329,3 +329,125 @@ class TestLifecycle:
 
     def test_stop_without_start_is_noop(self, engine):
         engine.stop()
+
+
+# ------------------------------------------------------------------
+# Character-based state selection
+# ------------------------------------------------------------------
+
+class TestCharacterStateSelection:
+    def test_characters_stored_on_init(self):
+        eng = RetroEngine(
+            game_id="sf2ce", match_id="test",
+            p1_character="Ryu", p2_character="Ken",
+        )
+        assert eng._p1_character == "Ryu"
+        assert eng._p2_character == "Ken"
+
+    def test_characters_default_empty(self):
+        eng = RetroEngine(game_id="sf2ce", match_id="test")
+        assert eng._p1_character == ""
+        assert eng._p2_character == ""
+
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_loads_state_file_when_exists(self, _mock_rom, mock_retro, tmp_path):
+        """When the state file exists, it should be loaded via em.set_state()."""
+        import rawl.engine.emulation.retro_engine as engine_mod
+
+        # Create a temp state file
+        states_dir = tmp_path / "sf2ce"
+        states_dir.mkdir()
+        state_file = states_dir / "Ryu_vs_Ken.state"
+        state_file.write_bytes(b"fake-state-data")
+
+        mock_env = MagicMock()
+        mock_env.reset.return_value = (
+            np.zeros((200, 256, 3), dtype=np.uint8),
+            {"health": 176, "enemy_health": 176, "continuetimer": 99},
+        )
+        mock_env.action_space.shape = (24,)
+        mock_env.step.return_value = (
+            np.zeros((200, 256, 3), dtype=np.uint8),
+            0.0, False, False,
+            {"health": 176, "enemy_health": 176, "continuetimer": 99},
+        )
+        mock_retro.make.return_value = mock_env
+
+        eng = RetroEngine(
+            game_id="sf2ce", match_id="test",
+            p1_character="Ryu", p2_character="Ken",
+        )
+
+        original_base = engine_mod._STATES_BASE_DIR
+        engine_mod._STATES_BASE_DIR = tmp_path
+        try:
+            eng.start()
+        finally:
+            engine_mod._STATES_BASE_DIR = original_base
+
+        # Verify state was loaded
+        mock_env.unwrapped.em.set_state.assert_called_once_with(b"fake-state-data")
+
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_falls_back_when_no_state_file(self, _mock_rom, mock_retro, tmp_path):
+        """When the state file doesn't exist, uses default state."""
+        import rawl.engine.emulation.retro_engine as engine_mod
+
+        # Empty states dir — no state files
+        states_dir = tmp_path / "sf2ce"
+        states_dir.mkdir()
+
+        mock_env = MagicMock()
+        mock_env.reset.return_value = (
+            np.zeros((200, 256, 3), dtype=np.uint8),
+            {"health": 176, "enemy_health": 176, "continuetimer": 99},
+        )
+        mock_retro.make.return_value = mock_env
+
+        eng = RetroEngine(
+            game_id="sf2ce", match_id="test",
+            p1_character="Ryu", p2_character="Ken",
+        )
+
+        original_base = engine_mod._STATES_BASE_DIR
+        engine_mod._STATES_BASE_DIR = tmp_path
+        try:
+            eng.start()
+        finally:
+            engine_mod._STATES_BASE_DIR = original_base
+
+        # em.set_state should NOT be called
+        mock_env.unwrapped.em.set_state.assert_not_called()
+
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_unsafe_names_use_default_state(self, _mock_rom, mock_retro):
+        """Path-traversal character names should fall back to default."""
+        mock_env = MagicMock()
+        mock_env.reset.return_value = (
+            np.zeros((200, 256, 3), dtype=np.uint8),
+            {"health": 176, "enemy_health": 176, "continuetimer": 99},
+        )
+        mock_retro.make.return_value = mock_env
+
+        eng = RetroEngine(
+            game_id="sf2ce", match_id="test",
+            p1_character="../../etc", p2_character="passwd",
+        )
+        eng.start()
+
+        mock_env.unwrapped.em.set_state.assert_not_called()
+
+    @patch.object(RetroEngine, "_ensure_rom")
+    def test_empty_characters_use_default_state(self, _mock_rom, mock_retro):
+        """Empty character strings should use default state (backwards compat)."""
+        mock_env = MagicMock()
+        mock_env.reset.return_value = (
+            np.zeros((200, 256, 3), dtype=np.uint8),
+            {"health": 176, "enemy_health": 176, "continuetimer": 99},
+        )
+        mock_retro.make.return_value = mock_env
+
+        eng = RetroEngine(game_id="sf2ce", match_id="test")
+        eng.start()
+
+        mock_env.unwrapped.em.set_state.assert_not_called()

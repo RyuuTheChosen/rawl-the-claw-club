@@ -32,6 +32,33 @@ class TestSubmitFighter:
         )
         assert r.status_code == 400
 
+    async def test_submit_invalid_character(self, client, seed_user, api_key_header):
+        """Invalid character for a valid game → 400."""
+        body = {
+            "name": "BadCharBot",
+            "game_id": "sf2ce",
+            "character": "../../etc",
+            "model_s3_key": "models/badchar.zip",
+        }
+        r = await client.post(
+            "/api/gateway/submit", json=body, headers=api_key_header
+        )
+        assert r.status_code == 400
+        assert "Invalid character" in r.json()["detail"]
+
+    async def test_submit_nonexistent_character(self, client, seed_user, api_key_header):
+        """Character not in allowlist → 400."""
+        body = {
+            "name": "FakeCharBot",
+            "game_id": "sf2ce",
+            "character": "Akuma",
+            "model_s3_key": "models/fakechar.zip",
+        }
+        r = await client.post(
+            "/api/gateway/submit", json=body, headers=api_key_header
+        )
+        assert r.status_code == 400
+
     async def test_submit_no_auth(self, client):
         body = {
             "name": "NoAuthBot",
