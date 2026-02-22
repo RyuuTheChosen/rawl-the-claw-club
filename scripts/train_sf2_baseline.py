@@ -214,7 +214,7 @@ def main():
     # Build vectorized environment
     env_fns = [make_env(state=args.state) for _ in range(args.n_envs)]
     if args.n_envs > 1:
-        venv = SubprocVecEnv(env_fns)
+        venv = SubprocVecEnv(env_fns, start_method="fork")
     else:
         venv = DummyVecEnv(env_fns)
     venv = VecMonitor(venv)

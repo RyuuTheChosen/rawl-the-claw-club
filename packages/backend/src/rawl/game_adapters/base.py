@@ -110,3 +110,4 @@ class GameAdapter(ABC):
         Returns "P1", "P2", or False.
         """
         ...
+

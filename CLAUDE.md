@@ -31,7 +31,7 @@ All commands: `make help`. Stop local Postgres if port conflicts: `net stop post
 - Training is off-platform — users run `rawl-trainer` on their own GPUs
 - Match engine flow: validate_info → lock_match → game loop → hash → MinIO/S3 → resolve_match
 - Game adapters: per-game modules (`sf2ce`, `sfiii3n`, `kof98`, `tektagt`) + stubs (`doapp`, `umk3`)
-- WebSocket streaming: video (binary JPEG 30fps) + data (JSON 10Hz)
+- WebSocket streaming: video (binary H.264 30fps, types: SEQ_HEADER/KEYFRAME/DELTA/EOS) + data (JSON 10Hz)
 - All match results hashed and uploaded to MinIO (local) before on-chain resolution
 - On-chain: `RawlBetting.sol` (EVM) — AccessControl + ReentrancyGuard + Pausable (OpenZeppelin v5)
 - Backend chain client: `rawl.evm.client.EVMClient` (web3.py v7, async)
@@ -62,9 +62,9 @@ All commands: `make help`. Stop local Postgres if port conflicts: `net stop post
 - `packages/contracts/src/RawlBetting.sol` — Main contract
 - `packages/contracts/test/` — Unit, fuzz, invariant tests
 - `packages/contracts/script/Deploy.s.sol` — Deployment script
-- Build: `make contracts-build` / Test: `make contracts-test`
+- Build: `make contracts-build` / Test: `make contracts-test` / Install deps: `make contracts-install` (lib/ is gitignored)
 - Roles: ORACLE_ROLE (create/lock/resolve), ADMIN_ROLE (cancel/withdraw/sweep/config)
-- 14 functions, gas-optimized packed structs (MatchPool: 6 slots, BetInfo: 1 slot)
+- 14 functions, gas-optimized packed structs (MatchPool: 6 slots, BetInfo: 1 slot); `via_ir = true` required (stack too deep)
 
 ## Scripts
 WSL2 scripts: `wsl -d Ubuntu-22.04 -- bash -c "cd /mnt/c/Projects/Rawl && python3 scripts/<name>.py"`
