@@ -175,6 +175,44 @@ def combat_test(state_bytes):
 
 
 # ---------------------------------------------------------------------------
+# Idle-warn fix
+# ---------------------------------------------------------------------------
+
+def fix_idle_warn(state_bytes, p1_id, p2_id, settle_frames=300):
+    """Advance an existing state N frames with P1 invincible to push past
+    any residual CPU attack windows, then re-apply safety patches.
+
+    Much faster than regenerating from scratch (no ROM boot needed).
+    Returns fixed state_bytes.
+    """
+    env = make_env_default()
+    try:
+        env.reset()
+        env.unwrapped.em.set_state(state_bytes)
+        for f in range(settle_frames):
+            env.step(NOOP)
+            if f % 30 == 0:
+                s = env.unwrapped.em.get_state()
+                blob = bytearray(s)
+                blob[RAM_BASE + P1_HEALTH] = MAX_HEALTH  # keep P1 alive
+                blob[RAM_BASE + P1_CHAR]   = p1_id       # lock chars
+                blob[RAM_BASE + P2_CHAR]   = p2_id
+                env.unwrapped.em.set_state(bytes(blob))
+        state = env.unwrapped.em.get_state()
+        blob = bytearray(state)
+        blob[RAM_BASE + MODE_BYTE]  = 0
+        blob[RAM_BASE + COMBAT_P1]  = 3
+        blob[RAM_BASE + COMBAT_P2]  = 3
+        blob[RAM_BASE + P1_CHAR]    = p1_id
+        blob[RAM_BASE + P2_CHAR]    = p2_id
+        blob[RAM_BASE + P1_HEALTH]  = MAX_HEALTH
+        blob[RAM_BASE + P2_HEALTH]  = MAX_HEALTH
+        return bytes(blob)
+    finally:
+        env.close()
+
+
+# ---------------------------------------------------------------------------
 # Core
 # ---------------------------------------------------------------------------
 
@@ -270,9 +308,51 @@ def main():
         "--skip-combat", action="store_true",
         help="Skip combat_test (saves ~35%% time on a full run)",
     )
+    parser.add_argument(
+        "--fix-idle", action="store_true",
+        help="Scan all existing states, advance 300 settle frames on failures, re-save",
+    )
     args = parser.parse_args()
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # --- Fix idle-warn: load, settle, re-save ---
+    if args.fix_idle:
+        print("=" * 72)
+        print("SF2CE Idle-Warn Fix — settle 300 frames on failing states")
+        print("=" * 72)
+        n_ok = n_fixed = n_still_fail = n_missing = 0
+        for p1_id in range(12):
+            for p2_id in range(12):
+                p1_name = CHAR_NAMES[p1_id]
+                p2_name = CHAR_NAMES[p2_id]
+                path = STATE_DIR / f"{p1_name.lower()}_vs_{p2_name.lower()}.state"
+                if not path.exists():
+                    print(f"  MISSING {p1_name} vs {p2_name}")
+                    n_missing += 1
+                    continue
+                state = path.read_bytes()
+                ok, h0, h1, fhit = idle_test(state)
+                if ok:
+                    print(f"  OK     {p1_name:8s} vs {p2_name}")
+                    n_ok += 1
+                    continue
+                print(f"  FIX    {p1_name:8s} vs {p2_name:8s} (f{fhit}) ...", end="", flush=True)
+                fixed = fix_idle_warn(state, p1_id, p2_id, settle_frames=600)
+                ok2, h0, h1, fhit2 = idle_test(fixed)
+                if ok2:
+                    path.write_bytes(fixed)
+                    print(" FIXED")
+                    n_fixed += 1
+                else:
+                    print(f" STILL_FAIL(f{fhit2}) — keeping original")
+                    n_still_fail += 1
+        print(f"\n{'=' * 72}")
+        print(f"  Already OK  : {n_ok}")
+        print(f"  Fixed       : {n_fixed}")
+        print(f"  Still fail  : {n_still_fail}")
+        print(f"  Missing     : {n_missing}")
+        return
 
     # --- Dry run: 4 diverse sample pairs ---
     if args.dry_run:
