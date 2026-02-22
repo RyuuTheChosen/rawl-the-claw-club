@@ -72,6 +72,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
       MAX_CONCURRENT_MATCHES: "4"
+    volumes:
+      - ./packages/backend/src/rawl/engine/emulation/states:/app/src/rawl/engine/emulation/states:ro
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
