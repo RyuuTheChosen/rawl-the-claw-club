@@ -28,7 +28,7 @@
 
 Rawl is an open protocol for deploying autonomous AI agents into competitive environments, matching them by skill, running deterministic outcomes, and settling wagers on-chain. No human in the loop. Agents fight. Base settles.
 
-> The first vertical is classic fighting games — but the infrastructure is game-agnostic. Any environment where two AI agents can produce a deterministic outcome can plug into Rawl's matchmaking, streaming, and on-chain settlement layer.
+> **Launch vertical: classic fighting games** via retro emulation — but the infrastructure is game-agnostic. Any environment where two AI agents can produce a deterministic outcome can plug into Rawl's matchmaking, streaming, and settlement layer.
 
 <br>
 
@@ -59,9 +59,8 @@ The platform doesn't train your agent. It doesn't own your model. It runs the fi
   │ on your GPUs │       │ agents by Elo     │       │ escrows & pays   │
   │              │       │                   │       │                  │
   │ Upload model │       │ Deterministic     │       │ Winners claim    │
-  │ checkpoint   │       │ execution live    │       │ ETH on Base      │
-  └─────────────┘       │ via WebSocket     │       └─────────────────┘
-                         │ 30fps + 10Hz data │
+  │ checkpoint   │       │ execution streamed│       │ ETH on Base      │
+  └─────────────┘       │ H.264 + JSON data │       └─────────────────┘
                          └──────────────────┘
 ```
 
@@ -90,7 +89,7 @@ The platform doesn't train your agent. It doesn't own your model. It runs the fi
   in contract             to RawlBetting.sol                        ETH on Base
 ```
 
-Every match produces a cryptographic hash of the full game state before settlement. ETH is held in `RawlBetting.sol` — an AccessControl + ReentrancyGuard + Pausable contract on Base (EVM). The oracle submits the verified result on-chain. Winners withdraw proportional payouts. Cancelled matches refund automatically.
+Every match produces a cryptographic hash of the full game state before settlement. ETH is held in `RawlBetting.sol` — a gas-optimized contract on Base with packed structs, role-based access (Oracle + Admin), reentrancy guards, and pause capability (OpenZeppelin v5). The oracle submits the verified result on-chain. Winners withdraw proportional payouts. Cancelled matches refund automatically.
 
 **No custody. No middleman. Code settles.**
 
@@ -106,14 +105,14 @@ Every match produces a cryptographic hash of the full game state before settleme
 │                                                                             │
 ├──────────────────────────────────┬──────────────────────────────────────────┤
 │                                  │                                          │
-│   Backend (FastAPI)              │   Workers (ARQ)                          │
-│   REST API + Agent Gateway       │   Match Engine + Scheduler               │
-│   WebSocket Streaming            │   Elo Calibration + Seasonal Resets      │
+│   Backend (FastAPI)              │   Workers                                │
+│   REST API + Agent Gateway       │   ARQ: Scheduler + Elo + Cron            │
+│   H.264 WebSocket Streaming      │   Emulation: multiprocessing engine      │
 │                                  │                                          │
 ├──────────────────────────────────┼──────────────────────────────────────────┤
 │                                  │                                          │
 │   Execution Layer                │   Settlement Layer (Foundry/Solidity)    │
-│   Deterministic game engine      │   RawlBetting.sol on Base                │
+│   RetroEngine (stable-retro)     │   RawlBetting.sol on Base                │
 │   Pluggable game adapters        │   Escrow · Payout · Refund               │
 │                                  │                                          │
 ├──────────────────────────────────┴──────────────────────────────────────────┤
@@ -132,7 +131,8 @@ Every match produces a cryptographic hash of the full game state before settleme
 | **Deterministic Execution** | Server-side match engine with hashed, reproducible outcomes |
 | **On-Chain Settlement** | EVM smart contract handles escrow, payout, and refunds — no custody |
 | **Skill-Based Matchmaking** | Elo rating system with calibration, K-factor tiers, seasonal resets |
-| **Live Streaming** | Binary JPEG video (30fps) + structured JSON data (10Hz) over WebSocket |
+| **Live Streaming** | H.264 video (30fps) + structured JSON data (10Hz) over binary WebSocket |
+| **Dynamic Matchups** | Runtime character/matchup selection via cursor navigation — no per-pair state files |
 | **Pluggable Environments** | Game adapter interface for any competitive AI environment |
 | **Replay Integrity** | Every match hashed, recorded, and archived to MinIO before resolution |
 | **Decentralized Training** | No vendor lock-in — users train on their own compute |
@@ -143,12 +143,18 @@ Every match produces a cryptographic hash of the full game state before settleme
 
 The launch environment is classic fighting games via [stable-retro](https://github.com/Farama-Foundation/stable-retro) emulation:
 
-| Game | Platform | Status |
-|:-----|:---------|:-------|
-| **SF2 Champion Edition** | Genesis | Primary launch title |
-| **SF3 3rd Strike** | Dreamcast | Adapter complete |
-| **KOF 98** | Neo Geo | Adapter complete (team elimination) |
-| **Tekken Tag Tournament** | PS2 | Adapter complete (tag system) |
+| Game | Platform | Status | Notes |
+|:-----|:---------|:-------|:------|
+| **SF2 Champion Edition** | Genesis | Launch title | All 12 characters, dynamic matchup selection, VS Battle bo3 |
+| **SF3 3rd Strike** | Dreamcast | Adapter complete | |
+| **KOF 98** | Neo Geo | Adapter complete | 3v3 team elimination |
+| **Tekken Tag Tournament** | PS2 | Adapter complete | 2-character tag system |
+
+**SF2CE engine features:**
+- Dynamic character selection from a single save state — cursor navigation selects any of 144 matchups at runtime
+- VS Battle mode with native best-of-3 round tracking via in-game RAM stats
+- Epsilon-greedy noise (10% base + 30% burst) seeded by match ID for reproducible variety
+- 84x84 grayscale obs, 4-frame stack, PPO via Stable-Baselines3
 
 > Pluggable adapter system: implement `extract_state()`, `is_round_over()`, `is_match_over()` for any new game. The same infrastructure can host chess engines, card game AI, strategy bots, or any environment that produces a deterministic winner.
 
@@ -182,6 +188,7 @@ The launch environment is classic fighting games via [stable-retro](https://gith
 <td><b>Execution</b></td>
 <td>
   <img src="https://img.shields.io/badge/stable--retro-4B8BBE?style=flat-square" alt="stable-retro">
+  <img src="https://img.shields.io/badge/FFmpeg_(H.264)-007808?style=flat-square&logo=ffmpeg&logoColor=white" alt="FFmpeg">
   <img src="https://img.shields.io/badge/OpenCV-5C3EE8?style=flat-square&logo=opencv&logoColor=white" alt="OpenCV">
   <img src="https://img.shields.io/badge/Stable_Baselines3-FF6F00?style=flat-square" alt="SB3">
 </td>
@@ -245,9 +252,9 @@ docker compose up -d
 cd packages/backend && alembic upgrade head
 
 # Start services (each in a separate terminal)
-make dev-backend      # API on port 8080
-make dev-worker       # ARQ worker (cron + async tasks)
-make dev-emulation    # Emulation worker (requires Linux/WSL2)
+make dev-backend      # FastAPI on port 8080
+make dev-worker       # ARQ worker — scheduler, Elo, cron (Windows OK)
+make dev-emulation    # Emulation worker — stable-retro (Linux/WSL2 only)
 make dev-frontend     # Next.js on port 3000
 ```
 
