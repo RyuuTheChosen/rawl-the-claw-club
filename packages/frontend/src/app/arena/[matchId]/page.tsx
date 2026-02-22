@@ -35,7 +35,7 @@ export default function ArenaPage() {
   const isLive = match?.status === "locked" && !replayReady;
 
   // Adaptive polling: faster when waiting for replay after live ends, normal otherwise
-  const pollInterval = liveEnded && !replayReady ? 2_000 : match?.status === "locked" ? 5_000 : 15_000;
+  const pollInterval = liveEnded && !replayReady ? 2_000 : match?.status === "locked" ? 5_000 : 3_000;
 
   useEffect(() => {
     if (loading) return;

@@ -13,7 +13,7 @@ import numpy as np
 from rawl.config import settings
 from rawl.engine.emulation.retro_engine import RetroEngine
 from rawl.engine.field_validator import FieldValidator
-from rawl.engine.frame_processor import encode_mjpeg_frame, preprocess_for_inference
+from rawl.engine.frame_processor import draw_input_overlay, encode_mjpeg_frame, preprocess_for_inference
 from rawl.engine.h264_encoder import H264Encoder, H264EncoderError
 from rawl.engine.match_result import MatchResult, compute_match_hash, resolve_tiebreaker
 from rawl.engine.model_loader import load_fighter_model
@@ -44,6 +44,9 @@ ACTION_NOISE_PROB = 0.10
 # create early trajectory divergence that cascades through the whole fight.
 NOISE_BURST_STEPS = 30  # ~120 frames = ~2s at 60fps with FRAME_SKIP=4
 NOISE_BURST_PROB = 0.30
+# Charselect pacing: slower than fight fps so ~550 frames → ~18s of video,
+# giving viewers 15-20s of character select before the fight starts.
+CHARSELECT_PACING_FPS = 30
 
 
 async def run_match(
@@ -114,11 +117,11 @@ async def run_match(
             int(hashlib.sha256(match_id.encode()).hexdigest()[:8], 16)
         )
 
-        # Step 2: Start emulation engine
+        # Step 2: Start emulation engine (loads charselect state, no navigation yet)
         logger.info("Starting emulation engine", extra={"match_id": match_id})
         obs, info = engine.start()
 
-        # Step 3: Validate info on first frame BEFORE lock_match
+        # Step 3: Validate info BEFORE lock (charselect frame has required fields)
         try:
             adapter.validate_info(info)
         except AdapterValidationError as e:
@@ -130,10 +133,9 @@ async def run_match(
                 await oracle_client.submit_cancel(match_id, reason="validation_failed")
             return None
 
-        # Validation passed — lock the match
+        # Step 4: Lock match — frontend can now detect and connect WebSocket
         if not calibration:
             await oracle_client.submit_lock(match_id)
-            # Publish initial heartbeat immediately after lock
             await redis_pool.set_with_expiry(
                 f"heartbeat:match:{match_id}",
                 str(int(time.time())),
@@ -143,7 +145,7 @@ async def run_match(
         match_locked = True
         lock_time = datetime.now(UTC)
 
-        # Start live H.264 encoder (if enabled and not calibrating)
+        # Step 5: Start encoder AFTER lock (Redis stream exists when viewers connect)
         encoder: H264Encoder | None = None
         if not calibration and settings.live_streaming_enabled:
             try:
@@ -158,6 +160,32 @@ async def run_match(
                     extra={"match_id": match_id},
                 )
                 encoder = None
+
+        # Step 6: Navigate charselect → fight (captures frames in memory)
+        obs, info, nav_frames = engine.navigate_to_fight()
+
+        # Step 7: Feed charselect frames PACED at streaming_fps so viewers
+        # see natural-speed character selection (~9s of video gives frontend
+        # time to poll, detect lock, and connect WebSocket)
+        if encoder and encoder.is_running and nav_frames:
+            frame_interval = 1.0 / CHARSELECT_PACING_FPS  # ~33ms at 30fps
+            feed_start = time.monotonic()
+            for i, nav_frame in enumerate(nav_frames):
+                try:
+                    await encoder.feed_frame(nav_frame)
+                except (H264EncoderError, ValueError):
+                    break
+                target = feed_start + (i + 1) * frame_interval
+                sleep_time = target - time.monotonic()
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+            logger.info(
+                "Streamed charselect navigation",
+                extra={"match_id": match_id, "nav_frames": len(nav_frames)},
+            )
+
+        # Reset pacing clock so fight frames are properly timed from here
+        start_time = time.monotonic()
 
         # Detect model observation space to adapt preprocessing
         obs_shape_a = model_a.observation_space.shape
@@ -271,10 +299,13 @@ async def run_match(
                 if not calibration:
                     raw_frame = obs["P1"]
 
-                    # Feed to live encoder (if active)
+                    # Feed to live encoder with input overlay (if active)
                     if encoder and encoder.is_running:
                         try:
-                            await encoder.feed_frame(raw_frame)
+                            stream_frame = draw_input_overlay(
+                                raw_frame, action_a, action_b,
+                            )
+                            await encoder.feed_frame(stream_frame)
                         except (H264EncoderError, ValueError):
                             logger.warning(
                                 "Encoder feed failed, disabling live stream",
@@ -307,6 +338,16 @@ async def run_match(
                     if match_result:
                         done = True
                         break
+                    # Round over but match continues — the game handles
+                    # round transitions natively in VS Battle mode (proper
+                    # menu navigation produces a state that supports bo3).
+                    logger.info(
+                        "Round %d ended (%s), game continues to next round",
+                        len(round_history),
+                        round_result,
+                        extra={"match_id": match_id},
+                    )
+                    break  # break inner frame-skip loop; outer loop continues
 
                 # Check env termination
                 if terminated or truncated:
